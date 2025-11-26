@@ -6,6 +6,8 @@ from chemicals import MW as MW_data_import
 from chemicals.acentric import omega as acentric_factor_data_import
 from chemicals.critical import Tc as critical_temperature_data_import, Pc as critical_pressure_data_import
 
+from CoolProp.CoolProp import PropsSI
+
 from scipy.constants import R
 
 
@@ -92,7 +94,8 @@ class GammaPhiPackage():
 
         self.eos_backend = eos_backend(components = components,
                                        pure_component_data_backend = pure_component_data_backend)
-        self.activity_model_backend = activity_model_backend(components = components)
+        self.activity_model_backend = activity_model_backend(components = components,
+                                                             pure_component_data_backend = pure_component_data_backend)
         self.components = components
 
 
@@ -106,6 +109,11 @@ class GammaPhiPackage():
         fugacity_coefs: np.ndarray = self.eos_backend.get_fugacity_coefs(temperature_K = temperature_K,
                                                                          pressure_Pa = pressure_Pa,
                                                                          molar_composition = molar_composition)
+        
+        activity_coefs: np.ndarray = self.activity_model_backend.get_activity_coefs(temperature_K = temperature_K,
+                                                                                    pressure_Pa = pressure_Pa,
+                                                                                    molar_composition = molar_composition)
+        
 
 
         return True
@@ -151,7 +159,7 @@ class IdealGasBackend:
     
 
 
-class SoaveRedlichKwongBackend():
+class SoaveRedlichKwongEoSBackend():
     name = 'SRK'
     components: tuple[str, ...]
     pure_component_data_backend: PureComponentDataBackend
@@ -277,17 +285,69 @@ class SoaveRedlichKwongBackend():
         
 
 
-class ActivityModelBackend():
-    name = 'ActivityModel'
+class WilsonActivityModel():
+    name = 'Wilson'
+    components: tuple[str, ...]
+    pure_component_data_backend: PureComponentDataBackend
     
     def __init__(self,
-                 components: tuple[str, ...]):
+                 components: tuple[str, ...],
+                 pure_component_data_backend: PureComponentDataBackend):
         self.components = components
+        self.pure_component_data_backend = pure_component_data_backend
+        self._cache = {}
+        
+
+    def components_screening(self,
+                             temperature_K,
+                             pressure_Pa) -> list[str]:
+
+        " This method screens components for Wilson activity model applicability. "
+        " The method returns a list of strings in which each entry corresponds to the law that is applicable for each component"
+        " 'HENRY' - Henry's law is applicable"
+        " 'RAOULT' - Raoult's law is applicable"
+
+        component_method = []
+        for k in range(len(self.components)):
+
+            if temperature_K > self.pure_component_data_backend.critical_temperature_K_data[k]:
+                component_method.append('HENRY')
+
+            else:
+                try: 
+                    # NOTE: fetching saturation pressure from CoolProp relies on correct component name
+                    saturation_pressure_Pa = PropsSI('P', 'T', temperature_K, 'Q', 1, CAS_from_any(self.components[k]))
+                except Exception: 
+                    msg = (
+                        f"CoolProp could not retrieve saturation pressure data for component {self.components[k]}"
+                        f" at T = {temperature_K} K."
+                        "assuming Henry's law is applicable."
+                    )
+                    print(msg)
+                    saturation_pressure_Pa = 0  
+                    
+                if saturation_pressure_Pa > max(pressure_Pa * 0.01, 1e3):
+                    component_method.append('RAOULT')
+                else:
+                    component_method.append('HENRY')
+
+        return component_method
 
 
-    def get_activity(self, 
-                     temperature_K: float,
-                     pressure_Pa: float,
-                     molar_composition: np.ndarray) -> np.ndarray:
+    def get_activity_coefs(self, 
+                           temperature_K: float,
+                           pressure_Pa: float,
+                           molar_composition: np.ndarray) -> np.ndarray:
+        " This method calculates activity coefficients using Wilson model. "
+
+        comp_method = self.components_screening(temperature_K = temperature_K,
+                                                pressure_Pa = pressure_Pa)
+        
+
+
+
         # Placeholder implementation
         return np.ones_like(molar_composition)
+    
+
+

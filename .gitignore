@@ -8,4 +8,7 @@
 # ignoring the iOS related file 
 .DS_Store
 
+# ignoring auxiliary files
+tmp_routines/
+
 

@@ -1,0 +1,10 @@
+# Wilson binary interaction parameters (gamma models), keyed by CAS
+# Source: internal compilation; see references below.
+# License: CC BY 4.0
+# schema: wilson_v1
+# columns: cas_i, cas_j, A12, A21, name/name, source, comments
+# notes:
+# - Units: J/mol 
+# references:
+#   [1] DWSIM parameter set export (https://github.com/DanWBR/dwsim/blob/ff7b50f91eb1db7873ea11feb7e5510804427e12/DWSIM.Thermodynamics/Assets/ChemSepIPD/wilson.ipd#L7)
+
