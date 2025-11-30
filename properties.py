@@ -110,9 +110,9 @@ class GammaPhiPackage():
                                                                          pressure_Pa = pressure_Pa,
                                                                          molar_composition = molar_composition)
         
-        activity_coefs: np.ndarray = self.activity_model_backend.get_activity_coefs(temperature_K = temperature_K,
-                                                                                    pressure_Pa = pressure_Pa,
-                                                                                    molar_composition = molar_composition)
+        activity_coefs: np.ndarray = self.activity_model_backend.get_effective_activity_coefs(temperature_K = temperature_K,
+                                                                                              pressure_Pa = pressure_Pa,
+                                                                                              molar_composition = molar_composition)
         
 
 
@@ -298,7 +298,7 @@ class WilsonActivityModel():
         self._cache = {}
         
 
-    def components_screening(self,
+    def _components_screening(self,
                              temperature_K,
                              pressure_Pa) -> list[str]:
 
@@ -315,13 +315,13 @@ class WilsonActivityModel():
 
             else:
                 try: 
-                    # NOTE: fetching saturation pressure from CoolProp relies on correct component name
+                    # NOTE: fetching saturation pressure from CoolProp relies on correct component name --> query by CAS RN
                     saturation_pressure_Pa = PropsSI('P', 'T', temperature_K, 'Q', 1, CAS_from_any(self.components[k]))
                 except Exception: 
                     msg = (
                         f"CoolProp could not retrieve saturation pressure data for component {self.components[k]}"
                         f" at T = {temperature_K} K."
-                        "assuming Henry's law is applicable."
+                        " assuming Henry's law is applicable."
                     )
                     print(msg)
                     saturation_pressure_Pa = 0  
@@ -334,15 +334,32 @@ class WilsonActivityModel():
         return component_method
 
 
-    def get_activity_coefs(self, 
+    def get_effective_activity_coefs(self, 
                            temperature_K: float,
                            pressure_Pa: float,
                            molar_composition: np.ndarray) -> np.ndarray:
-        " This method calculates activity coefficients using Wilson model. "
+        " This method calculates effective activity coefficients using Wilson model. "
 
-        comp_method = self.components_screening(temperature_K = temperature_K,
+        " NOTE: this method returns an array of effective activity coefficients, NOT the activity coefficients themselves. "
+        " The effective activity coefficient is defined as follows: "
+        " In case of Raoult's law: gamma_i_eff = gamma_i "
+        " In case of Henry's law: gamma_i_eff = H_i / P_sat_ref, which is equivalent to activity coefficient at infinite dilution. "
+
+        comp_method = self._components_screening(temperature_K = temperature_K,
                                                 pressure_Pa = pressure_Pa)
         
+
+        # Iterate over components and estimate effective activity coefficients based on screening
+        for k in range(len(self.components)):
+            if comp_method[k] == 'RAOULT':
+                # Placeholder implementation
+                pass
+            elif comp_method[k] == 'HENRY':
+                # Placeholder implementation
+                pass
+            else:
+                raise Exception("Component screening method not recognized.")
+
 
 
 
