@@ -64,28 +64,42 @@ class WilsonActivityModel():
         lambda_12 = theta[0]
         lambda_21 = theta[1]
 
-        x_exp_val = regression_params['x1_val']
-        y_exp_val = regression_params['y1_val']
+        x_exp_data = regression_params['x1']
+        y_exp_data = regression_params['y1']
+        pressure_Pa_data = regression_params['pressure_Pa']
+        temperature_K = regression_params['temperature_K']
         saturation_pressure_Pa_1 = regression_params['saturation_pressure_Pa_1']
         saturation_pressure_Pa_2 = regression_params['saturation_pressure_Pa_2']
-        pressure_Pa = regression_params['pressure_Pa']
-        fugacity_coef_1 = regression_params['fugacity_coefs'][0]
-        fugacity_coef_2 = regression_params['fugacity_coefs'][1]
+        eos_backed = regression_params['eos_backend']
 
-        gamma_1_calc, gamma_2_calc = self.get_activity_coefs(lambda_12 = lambda_12,
-                                                             lambda_21 = lambda_21,
-                                                             x_val = x_exp_val)
+        error_data = []
+        for k in range(len(x_exp_data)):
+            x_exp_val = x_exp_data[k]
+            y_exp_val = y_exp_data[k]
+            pressure_Pa = pressure_Pa_data[k]
+            gamma_1_calc, gamma_2_calc = self.get_activity_coefs(lambda_12 = lambda_12,
+                                                                 lambda_21 = lambda_21,
+                                                                 x_val = x_exp_val)
 
-        # based on the modified Raoult's law: y_i * fi_i * P_total= x_i * gamma_i * P_sat_i 
-        y_calc_val_1 = x_exp_val * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
-        y_calc_val_2 = (1 - x_exp_val) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
+            if eos_backed is not None:
+                fugacity_coef_1, fugacity_coef_2  = eos_backed.get_fugacity_coefs(temperature_K = temperature_K,
+                                                                  pressure_Pa = pressure_Pa,
+                                                                  molar_composition = np.array([y_exp_val, 1 - y_exp_val])) 
+            else: 
+                fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   # ideal gas assumption if no EoS backend is specified
 
-        y_exp_val_1  = y_exp_val
-        y_exp_val_2  = 1 - y_exp_val
 
-        error = (y_exp_val_1 - y_calc_val_1)**2 + (y_exp_val_2 - y_calc_val_2)**2
+            # based on the modified Raoult's law: y_i * fi_i * P_total= x_i * gamma_i * P_sat_i 
+            y_calc_val_1 = x_exp_val * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
+            y_calc_val_2 = (1 - x_exp_val) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
 
-        return error
+            y_exp_val_1  = y_exp_val
+            y_exp_val_2  = 1 - y_exp_val
+
+            error = (y_exp_val_1 - y_calc_val_1)**2 + (y_exp_val_2 - y_calc_val_2)**2
+            error_data.append(error)
+
+        return sum(error_data)
     
 
     @staticmethod
@@ -100,25 +114,38 @@ class WilsonActivityModel():
     @staticmethod
     def get_message(regression_params: dict,
                     components: list[str],
-                    result) -> str:
+                    result) -> None:
         
         temperature_K = regression_params['temperature_K']
         pressure_atm  = regression_params['pressure_Pa'] / 1e5
-        x1_val = regression_params['x1_val']
-        y1_val = regression_params['y1_val']
+        x1_val = regression_params['x1']
+        y1_val = regression_params['y1']
 
         if result.success:
-            msg = (f"T = {temperature_K:.2f} K, P = {pressure_atm:.2f} atm, "
-                   f"x_{components[0]} = {x1_val:.3f}, y_{components[0]} = {y1_val:.3f} --> "
-                   f" Fitted Wilson BIP parameters: "
-                   f" lambda_12 = {result.x[0]:.6f}, "
-                   f" lambda_21 = {result.x[1]:.6f}. "
-                   f" residual = {result.fun:.6e}.")
+
+            if len(pressure_atm) > 1:
+                press_msg = f"P range = {min(pressure_atm):.2f} - {max(pressure_atm):.2f} atm, "
+                comp_msg  = f"x_{components[0]} range = {min(x1_val):.3f} - {max(x1_val):.3f}, " \
+                            f"y_{components[0]} range = {min(y1_val):.3f} - {max(y1_val):.3f}"
+            elif len(pressure_atm) == 1:
+                press_msg = f"P = {pressure_atm[0]:.2f} atm, "
+                comp_msg  = f"x_{components[0]} = {x1_val[0]:.3f}, y_{components[0]} = {y1_val[0]:.3f}"
+            else:
+                raise ValueError(" Either pressure of component data array is empty. ")
+
+            msg = (f"T = {temperature_K:.2f} K, " + 
+                   press_msg + 
+                   comp_msg + "\n" +
+                   " --> Fitted Wilson BIP parameters: "
+                   f" lambda_12 = {result.x[0]:.4f}, "
+                   f" lambda_21 = {result.x[1]:.4f}. "
+                   f" residual = {result.fun:.4e}.")
+            
         else:
             msg = (f" BIP parameters regression did not converge: "
                    f" {result.message} ")
 
-        return msg
+        print(msg)
 
 
 
@@ -194,84 +221,68 @@ class BinaryInteractionParametersRegression():
         tol = 1e-2  # tolerance for "constant" (Pa or K)
 
         def is_constant(arr):
+            # tests if all values in arr are the same within tolerance
+            # catches arrays with too few data points
+            if len(arr) <= 1:
+                raise ValueError("Only one data point provided, cannot proceed with regression.")
             return np.all(np.abs(arr - arr[0]) < tol)
-        
+
+
         if is_constant(pressure_Pa):
-            # Isobaric data set
-            self.data_set.append({
-                'type': 'isobaric',
-                'pressure_Pa': pressure_Pa,
-                'temperature_K': temperature_K,
-                'x_data': x_data,
-                'y_data': y_data,
-                'indices': np.arange(len(x_data))
-            })
+            # Isobaric data 
+            for k in range(len(temperature_K)): 
+                self.data_set.append({
+                    'type': 'isobaric_single_point',
+                    'pressure_Pa': np.array([pressure_Pa[k]]),
+                    'temperature_K': temperature_K[k],
+                    'x_data': np.array([x_data[k]]),
+                    'y_data': np.array([y_data[k]]),
+                    'indices': np.array([k])
+                })
 
             msg =(f" Data import: "
-                  f" Detected isobaric VLE data set for {self.components[0]} and {self.components[1]} " 
-                  f"at P = {pressure_Pa[0]/1e5:.2f} bar. ")
+                  f" Detected isobaric VLE data set for {self.components[0]} and {self.components[1]}" 
+                  f" at P = {pressure_Pa[0]/1e5:.2f} bar. ")
+            print(colored(msg, 'green'))
 
         elif is_constant(temperature_K):
             # Isothermal data set
             self.data_set.append({
-                'type': 'isothermal',
-                'pressure_Pa': pressure_Pa,
-                'temperature_K': temperature_K,
-                'x_data': x_data,
-                'y_data': y_data,
-                'indices': np.arange(len(x_data))
-            })
+                    'type': 'isothermal',
+                    'pressure_Pa': np.array(pressure_Pa),
+                    'temperature_K': temperature_K[0],
+                    'x_data': np.array([x_data]),
+                    'y_data': np.array([y_data]),
+                    'indices': np.array([k for k in range(len(temperature_K))])
+                })
 
-            msg =(f" Data import: "
-                  f" Detected isothermal VLE data set for {self.components[0]} and {self.components[1]} " 
-                  f" at T = {temperature_K[0]:.2f} K. ")
-
+            msg =(f" Data import warning: "
+                  f" Detected only one isothermal VLE data set for {self.components[0]} and {self.components[1]} " 
+                  f" at T = {temperature_K[0]:.2f} K. \n"
+                  f" Regression is likely to be inaccurate due to lack of temperature variability." 
+                  f" Consider adding more data points at different temperatures. ")
+            print(colored(msg, 'yellow'))
+            
         else:
-
             # Mixed data set - split into isobaric and isothermal
-            unique_pressures = np.unique(pressure_Pa)
             unique_temperatures = np.unique(temperature_K)
-
-            if len(unique_pressures) < len(unique_temperatures):
-                # More unique temperatures - treat as isobaric sets
-                for pressure_val in unique_pressures:
-                    indices = np.where(np.abs(pressure_Pa - pressure_val) < tol)[0]
-                    self.data_set.append({
-                        'type': 'isobaric',
-                        'pressure_Pa': pressure_Pa[indices],
-                        'temperautre_K': temperature_K[indices],
-                        'x_data': x_data[indices],
-                        'y_data': y_data[indices],
-                        'indices': indices
-                    })
-
-                msg =(f" Data import: "
-                      f" Detected mixed VLE data set for {self.components[0]} and {self.components[1]}. "
-                      f" Split into {len(unique_pressures)} isobaric subsets. ")
-
-            else:
-                # More unique pressures - treat as isothermal sets
-                for temperature_val in unique_temperatures:
+            for temperature_val in unique_temperatures:
                     indices = np.where(np.abs(temperature_K - temperature_val) < tol)[0]
                     self.data_set.append({
                         'type': 'isothermal',
                         'pressure_Pa': pressure_Pa[indices],
-                        'temperature_K': temperature_K[indices],
+                        'temperature_K': temperature_val,
                         'x_data': x_data[indices],
                         'y_data': y_data[indices],
                         'indices': indices
                     })
 
-                msg = (f" Data import: "
-                       f" Detected mixed VLE data set for {self.components[0]} and {self.components[1]}. " 
-                       f" Split into {len(unique_temperatures)} isothermal subsets. ")
-
-        if msg:        
+            msg = (f" Data import: "
+                   f" Detected mixed VLE data set for {self.components[0]} and {self.components[1]}. " 
+                   f" Split into {len(unique_temperatures)} isothermal subsets. ")
             print(colored(msg, 'green'))
-        else:
-            raise print(colored(" Data import: Unable to detect VLE data type (isobaric/isothermal/mixed). ",'red'))
-        
 
+        
     def _configure_activity_model_backend(self,
                                           components: list) -> None:
 
@@ -330,67 +341,47 @@ class BinaryInteractionParametersRegression():
         pass
 
     
-    
     def regress_BIP_parameters_elementwise(self) -> None:
-        
+        " Function to regress Wilson BIP parameters for each temperature point (i.e., data_set) individually. "
+
         opt_data_results = []
-        opt_data_temperature_K = []
-        opt_data_pressure_Pa = []
 
         for data_set in self.data_set:
-            for k in range(len(data_set['x_data'])):
 
                 try: 
-                    saturation_pressure_Pa_1 = PropsSI('P','T',data_set['temperature_K'][k],'Q',1,CAS_from_any(self.components[0]))
-                    saturation_pressure_Pa_2 = PropsSI('P','T',data_set['temperature_K'][k],'Q',1,CAS_from_any(self.components[1]))
+                    saturation_pressure_Pa_1 = PropsSI('P','T',data_set['temperature_K'],'Q',1,CAS_from_any(self.components[0]))
+                    saturation_pressure_Pa_2 = PropsSI('P','T',data_set['temperature_K'],'Q',1,CAS_from_any(self.components[1]))
                 except:
-                    msg = (f" Saturation pressure calculation failed for T = {data_set['temperature_K'][k]:.2f} K. "
+                    msg = (f" Saturation pressure calculation failed for T = {data_set['temperature_K']:.2f} K. "
                            f" Skipping this data point." 
                            f" Check if critical temperature is exceeded or if components are not supported by CoolProp. ")
                     print(colored(msg, 'yellow'))
                     break
 
-
-                if self.equation_of_state is not None:
-                    fugacity_coefs    = self.eos_backend.get_fugacity_coefs(temperature_K = data_set['temperature_K'][k],
-                                                                            pressure_Pa = data_set['pressure_Pa'][k],
-                                                                            molar_composition = np.array([data_set['y_data'][k], 1 - data_set['y_data'][k]])) 
-                else: 
-                    fugacity_coefs    = np.array([1.0, 1.0])   # ideal gas assumption if no EoS backend is specified
-
-
-                regression_params = {'y1_val': data_set['y_data'][k],
-                                     'x1_val': data_set['x_data'][k],
+                regression_params = {'y1': data_set['y_data'],
+                                     'x1': data_set['x_data'],
                                      'saturation_pressure_Pa_1': saturation_pressure_Pa_1,
                                      'saturation_pressure_Pa_2': saturation_pressure_Pa_2,
-                                     'pressure_Pa': data_set['pressure_Pa'][k],
-                                     'temperature_K': data_set['temperature_K'][k],
-                                     'fugacity_coefs': fugacity_coefs}
+                                     'pressure_Pa': data_set['pressure_Pa'],
+                                     'temperature_K': data_set['temperature_K'],
+                                     'eos_backend': self.eos_backend if self.equation_of_state is not None else None}
 
                 result = minimize(fun = self.activity_model_backend.objective_function,
                                   x0 = self.activity_model_backend.initial_guess(initial_guess=opt_data_results[-1] 
                                                                                  if len(opt_data_results) > 0 else None),
                                   args = (regression_params),
                                   method = 'SLSQP',
-                                  bounds=((1e-3, None), (1e-3, None)))
+                                  bounds=((1e-3, None), (1e-3, None))) # NOTE define dedicated bounds based on activity model
 
                 msg = self.activity_model_backend.get_message(result=result,
                                                               regression_params=regression_params,
                                                               components=self.components)
-                print(msg)
 
                 opt_data_results.append(result.x)
-                opt_data_temperature_K.append(data_set['temperature_K'][k])
-                opt_data_pressure_Pa.append(data_set['pressure_Pa'][k])
-                
-            print()  # blank line between data sets
 
         self.opt_results = np.array(opt_data_results)
-        self.opt_temperature_K = np.array(opt_data_temperature_K)
-        self.opt_pressure_Pa = np.array(opt_data_pressure_Pa)
 
         pass
-
 
 
 
