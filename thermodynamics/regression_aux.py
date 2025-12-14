@@ -408,13 +408,14 @@ class BinaryInteractionParametersRegression():
         
         error_data = []
         for k in range(len(temperature_K_data)):
-            ln_Lambda_ij_exp = np.log(bip_data[k])
+            Lambda_ij_exp  = np.log(bip_data[k])
 
-            Lambda_ij_calc    = self._DIPPR_4p_polynomial_Wilson(coeffs = coeffs,
-                                                                 temperature_K = temperature_K_data[k])
-            ln_Lambda_ij_calc = np.log(Lambda_ij_calc)
+            Lambda_ij_calc = self._DIPPR_4p_polynomial_Wilson(coeffs = coeffs,
+                                                              temperature_K = temperature_K_data[k])
 
-            error = (ln_Lambda_ij_exp - ln_Lambda_ij_calc)**2
+            # ln_Lambda_ij_calc = np.log(Lambda_ij_calc)
+
+            error = (Lambda_ij_exp - Lambda_ij_calc)**2
             error_data.append(error)
 
         return sum(error_data)
@@ -440,12 +441,12 @@ class BinaryInteractionParametersRegression():
                 lambda_21_data.append(opt_result[1])
 
             results_12 = minimize(fun = self._DIPPR_4p_polynomial_Wilson_objective_function,
-                                  x0 = np.array([0.0, 0.0, 0.0, 0.0]),
+                                  x0 = np.array([1.0, 0.0, 0.0, 0.0]),
                                   args = (np.array(temperature_K_data), np.array(lambda_12_data)),
                                   method = 'SLSQP')
             
             results_21 = minimize(fun = self._DIPPR_4p_polynomial_Wilson_objective_function,
-                                  x0 = np.array([0.0, 0.0, 0.0, 0.0]),
+                                  x0 = np.array([1.0, 0.0, 0.0, 0.0]),
                                   args = (np.array(temperature_K_data), np.array(lambda_21_data)),
                                   method = 'SLSQP')
             
