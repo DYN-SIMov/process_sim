@@ -348,45 +348,129 @@ class BinaryInteractionParametersRegression():
 
         for data_set in self.data_set:
 
-                try: 
-                    saturation_pressure_Pa_1 = PropsSI('P','T',data_set['temperature_K'],'Q',1,CAS_from_any(self.components[0]))
-                    saturation_pressure_Pa_2 = PropsSI('P','T',data_set['temperature_K'],'Q',1,CAS_from_any(self.components[1]))
-                except:
-                    msg = (f" Saturation pressure calculation failed for T = {data_set['temperature_K']:.2f} K. "
-                           f" Skipping this data point." 
-                           f" Check if critical temperature is exceeded or if components are not supported by CoolProp. ")
-                    print(colored(msg, 'yellow'))
-                    break
+            try: 
+                saturation_pressure_Pa_1 = PropsSI('P','T',data_set['temperature_K'],'Q',1,CAS_from_any(self.components[0]))
+                saturation_pressure_Pa_2 = PropsSI('P','T',data_set['temperature_K'],'Q',1,CAS_from_any(self.components[1]))
+            except:
+                msg = (f" Saturation pressure calculation failed for T = {data_set['temperature_K']:.2f} K. "
+                        f" Skipping this data point." 
+                        f" Check if critical temperature is exceeded or if components are not supported by CoolProp. ")
+                print(colored(msg, 'yellow'))
+                break
 
-                regression_params = {'y1': data_set['y_data'],
-                                     'x1': data_set['x_data'],
-                                     'saturation_pressure_Pa_1': saturation_pressure_Pa_1,
-                                     'saturation_pressure_Pa_2': saturation_pressure_Pa_2,
-                                     'pressure_Pa': data_set['pressure_Pa'],
-                                     'temperature_K': data_set['temperature_K'],
-                                     'eos_backend': self.eos_backend if self.equation_of_state is not None else None}
+            regression_params = {'y1': data_set['y_data'],
+                                    'x1': data_set['x_data'],
+                                    'saturation_pressure_Pa_1': saturation_pressure_Pa_1,
+                                    'saturation_pressure_Pa_2': saturation_pressure_Pa_2,
+                                    'pressure_Pa': data_set['pressure_Pa'],
+                                    'temperature_K': data_set['temperature_K'],
+                                    'eos_backend': self.eos_backend if self.equation_of_state is not None else None}
 
-                result = minimize(fun = self.activity_model_backend.objective_function,
-                                  x0 = self.activity_model_backend.initial_guess(initial_guess=opt_data_results[-1] 
-                                                                                 if len(opt_data_results) > 0 else None),
-                                  args = (regression_params),
-                                  method = 'SLSQP',
-                                  bounds=((1e-3, None), (1e-3, None))) # NOTE define dedicated bounds based on activity model
+            result = minimize(fun = self.activity_model_backend.objective_function,
+                              x0 = self.activity_model_backend.initial_guess(initial_guess=opt_data_results[-1] 
+                                                                            if len(opt_data_results) > 0 else None),
+                              args = (regression_params),
+                              method = 'SLSQP',
+                              bounds=((1e-3, None), (1e-3, None))) # NOTE define dedicated bounds based on activity model
 
-                msg = self.activity_model_backend.get_message(result=result,
-                                                              regression_params=regression_params,
-                                                              components=self.components)
+            msg = self.activity_model_backend.get_message(result=result,
+                                                            regression_params=regression_params,
+                                                            components=self.components)
 
-                opt_data_results.append(result.x)
+            opt_data_results.append(result.x)
 
-        self.opt_results = np.array(opt_data_results)
+        self.elementwise_opt_results = np.array(opt_data_results)
 
         pass
 
 
+    @ staticmethod
+    def _DIPPR_4p_polynomial_Wilson(coeffs,
+                                    temperature_K) -> float:
 
-    def estimate_DIPPR_polynomial(self) -> None:
+        " Polynomial for BIP: Lambda_ij = exp(A + B/T + C*ln(T) + D*T). "
+        " Based on simplified version of the polynomial form described in docs "
+        " of thermo python library (thermo.Wilson). "
+
+        A, B, C, D = coeffs
+        T = temperature_K
+
+        Lambda_ij_calc = np.exp(A + B/T + C*np.log(T) + D*T)
+
+        return Lambda_ij_calc
+
+
+    def _DIPPR_4p_polynomial_Wilson_objective_function(self, 
+                                                       coeffs: np.ndarray,
+                                                       temperature_K_data: np.ndarray,
+                                                       bip_data: np.ndarray) -> float:
+        " Objective function for DIPPR polynomial regression of Wilson BIP parameters. "
         
+        error_data = []
+        for k in range(len(temperature_K_data)):
+            ln_Lambda_ij_exp = np.log(bip_data[k])
+
+            Lambda_ij_calc    = self._DIPPR_4p_polynomial_Wilson(coeffs = coeffs,
+                                                                 temperature_K = temperature_K_data[k])
+            ln_Lambda_ij_calc = np.log(Lambda_ij_calc)
+
+            error = (ln_Lambda_ij_exp - ln_Lambda_ij_calc)**2
+            error_data.append(error)
+
+        return sum(error_data)
+
+
+    def estimate_DIPPR_polynomial_from_elementwise_optimisation(self) -> None:
+        
+        if self.elementwise_opt_results is None:
+            raise ValueError(" Elementwise optimisation results not found. "
+                             " Run regress_BIP_parameters_elementwise() first. ")
+        
+        esitmation_completed = False
+
+        if self.activity_model.upper() == 'WILSON':
+            
+            temperature_K_data = []
+            lambda_12_data = []
+            lambda_21_data = []
+
+            for data_set, opt_result in zip(self.data_set, self.elementwise_opt_results):
+                temperature_K_data.append(data_set['temperature_K'])
+                lambda_12_data.append(opt_result[0])
+                lambda_21_data.append(opt_result[1])
+
+            results_12 = minimize(fun = self._DIPPR_4p_polynomial_Wilson_objective_function,
+                                  x0 = np.array([0.0, 0.0, 0.0, 0.0]),
+                                  args = (np.array(temperature_K_data), np.array(lambda_12_data)),
+                                  method = 'SLSQP')
+            
+            results_21 = minimize(fun = self._DIPPR_4p_polynomial_Wilson_objective_function,
+                                  x0 = np.array([0.0, 0.0, 0.0, 0.0]),
+                                  args = (np.array(temperature_K_data), np.array(lambda_21_data)),
+                                  method = 'SLSQP')
+            
+            if results_12.success and results_21.success:
+                self.DIPPR_polynomial_coeffs = {
+                    'Lambda_12': results_12.x,
+                    'Lambda_21': results_21.x
+                }
+                esitmation_completed = True
+
+                msg = (f"\n DIPPR 4th order polynomial regression of Wilson BIP parameters converged successfully. \n"
+                       f" Fitted coefficients for Lambda_12: A = {results_12.x[0]:.4f}, B = {results_12.x[1]:.4f}, "
+                       f"C = {results_12.x[2]:.4f}, D = {results_12.x[3]:.4f}."
+                       f" Residual = {results_12.fun:.4e}. "
+                       f"\n Fitted coefficients for Lambda_21: A = {results_21.x[0]:.4f}, B = {results_21.x[1]:.4f}, "
+                       f"C = {results_21.x[2]:.4f}, D = {results_21.x[3]:.4f}. "
+                       f" Residual = {results_21.fun:.4e}. ")
+                print(colored(msg, 'green'))
+            else: 
+                raise RuntimeError(" DIPPR polynomial regression of Wilson BIP parameters did not converge. ")
+
+        
+
+        if esitmation_completed is False:
+            raise NotImplementedError(" DIPPR polynomial regression not implemented for the specified activity model. ")
 
         
         pass
