@@ -1,14 +1,13 @@
 import pandas as pd
 import numpy as np
 
-import matplotlib
-matplotlib.use("Agg")                       # switch off interactive mode (suppresssing the warning messages)
 import matplotlib.pyplot as plt 
 
 from typing import Protocol
 
 from itertools import takewhile             # for parsing
 from scipy.optimize import minimize         # for regression 
+from scipy.stats import linregress          # for R2 calculation
 from termcolor import colored               # for colored text output
 
 from CoolProp.CoolProp import PropsSI
@@ -92,11 +91,16 @@ class WilsonActivityModel():
             # based on the modified Raoult's law: y_i * fi_i * P_total= x_i * gamma_i * P_sat_i 
             y_calc_val_1 = x_exp_val * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
             y_calc_val_2 = (1 - x_exp_val) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
+            
+            pressure_total_Pa_calc = ((x_exp_val * gamma_1_calc * saturation_pressure_Pa_1) / (y_calc_val_1 * fugacity_coef_1) + 
+                                        ((1 - x_exp_val) * gamma_2_calc * saturation_pressure_Pa_2) / (y_calc_val_2 * fugacity_coef_2))/2
 
             y_exp_val_1  = y_exp_val
             y_exp_val_2  = 1 - y_exp_val
 
-            error = (y_exp_val_1 - y_calc_val_1)**2 + (y_exp_val_2 - y_calc_val_2)**2
+            error = ((y_exp_val_1 - y_calc_val_1)**2 + 
+                     (y_exp_val_2 - y_calc_val_2)**2 + 
+                     ((pressure_Pa - pressure_total_Pa_calc)/pressure_Pa)**2)
             error_data.append(error)
 
         return sum(error_data)
@@ -218,7 +222,17 @@ class BinaryInteractionParametersRegression():
 
         self.data_set = []
         pressure_Pa, temperature_K, x_data, y_data = data
-        tol = 1e-2  # tolerance for "constant" (Pa or K)
+        tol = 1e-3  # tolerance for "constant" (Pa or K)
+
+        # filtering out too low and too high concnetrations to avoid singularities during the datafit
+        valid_mask = (
+            (x_data >= tol) & (x_data <= 1-tol) &
+            (y_data >= tol) & (y_data <= 1-tol)
+        )
+        pressure_Pa = pressure_Pa[valid_mask]
+        temperature_K = temperature_K[valid_mask]
+        x_data = x_data[valid_mask]
+        y_data = y_data[valid_mask]
 
         def is_constant(arr):
             # tests if all values in arr are the same within tolerance
@@ -359,12 +373,12 @@ class BinaryInteractionParametersRegression():
                 break
 
             regression_params = {'y1': data_set['y_data'],
-                                    'x1': data_set['x_data'],
-                                    'saturation_pressure_Pa_1': saturation_pressure_Pa_1,
-                                    'saturation_pressure_Pa_2': saturation_pressure_Pa_2,
-                                    'pressure_Pa': data_set['pressure_Pa'],
-                                    'temperature_K': data_set['temperature_K'],
-                                    'eos_backend': self.eos_backend if self.equation_of_state is not None else None}
+                                 'x1': data_set['x_data'],
+                                 'saturation_pressure_Pa_1': saturation_pressure_Pa_1,
+                                 'saturation_pressure_Pa_2': saturation_pressure_Pa_2,
+                                 'pressure_Pa': data_set['pressure_Pa'],
+                                 'temperature_K': data_set['temperature_K'],
+                                 'eos_backend': self.eos_backend if self.equation_of_state is not None else None}
 
             result = minimize(fun = self.activity_model_backend.objective_function,
                               x0 = self.activity_model_backend.initial_guess(initial_guess=opt_data_results[-1] 
@@ -388,7 +402,8 @@ class BinaryInteractionParametersRegression():
     def _DIPPR_4p_polynomial_Wilson(coeffs,
                                     temperature_K) -> float:
 
-        " Polynomial for BIP: Lambda_ij = exp(A + B/T + C*ln(T) + D*T). "
+        " 4 parameter DIPPR-style polynomial for BIP: "
+        " Lambda_ij = exp(A + B/T + C*ln(T) + D*T). "
         " Based on simplified version of the polynomial form described in docs "
         " of thermo python library (thermo.Wilson). "
 
@@ -408,13 +423,9 @@ class BinaryInteractionParametersRegression():
         
         error_data = []
         for k in range(len(temperature_K_data)):
-            Lambda_ij_exp  = np.log(bip_data[k])
-
+            Lambda_ij_exp  = bip_data[k]
             Lambda_ij_calc = self._DIPPR_4p_polynomial_Wilson(coeffs = coeffs,
                                                               temperature_K = temperature_K_data[k])
-
-            # ln_Lambda_ij_calc = np.log(Lambda_ij_calc)
-
             error = (Lambda_ij_exp - Lambda_ij_calc)**2
             error_data.append(error)
 
@@ -441,14 +452,16 @@ class BinaryInteractionParametersRegression():
                 lambda_21_data.append(opt_result[1])
 
             results_12 = minimize(fun = self._DIPPR_4p_polynomial_Wilson_objective_function,
-                                  x0 = np.array([1.0, 0.0, 0.0, 0.0]),
+                                  x0 = np.array([0.0, 0.0, 0.0, 0.0]),
                                   args = (np.array(temperature_K_data), np.array(lambda_12_data)),
-                                  method = 'SLSQP')
+                                  method = 'SLSQP',
+                                  bounds = ((-1e3,1e3),(-1e3,1e3),(-1e3,1e3),(-1e0,1e0)))
             
             results_21 = minimize(fun = self._DIPPR_4p_polynomial_Wilson_objective_function,
-                                  x0 = np.array([1.0, 0.0, 0.0, 0.0]),
+                                  x0 = np.array([0.0, 0.0, 0.0, 0.0]),
                                   args = (np.array(temperature_K_data), np.array(lambda_21_data)),
-                                  method = 'SLSQP')
+                                  method = 'SLSQP',
+                                  bounds = ((-1e3,1e3),(-1e3,1e3),(-1e3,1e3),(-1e0,1e0)))
             
             if results_12.success and results_21.success:
                 self.DIPPR_polynomial_coeffs = {
@@ -469,13 +482,11 @@ class BinaryInteractionParametersRegression():
                 raise RuntimeError(" DIPPR polynomial regression of Wilson BIP parameters did not converge. ")
 
         
-
         if esitmation_completed is False:
             raise NotImplementedError(" DIPPR polynomial regression not implemented for the specified activity model. ")
 
         
         pass
-
 
 
     def record_regression_results(self) -> None:
@@ -484,8 +495,102 @@ class BinaryInteractionParametersRegression():
         pass
 
 
+    def results_visualization(self,
+                              get_parity_plot,
+                              get_VLE_curve) -> None:
+        
+        temperature_K_data = []
+        pressure_Pa_data = []
+        x1_exp_data = []
+        y1_exp_data = []
 
-    def plot_regression_results(self) -> None:
+        for data_set in self.data_set:
+            x1_exp_data.extend(data_set['x_data'])
+            y1_exp_data.extend(data_set['y_data'])
+            temperature_K_data.extend([data_set['temperature_K']] * len(data_set['x_data']))
+            pressure_Pa_data.extend(data_set['pressure_Pa'])
+
+        x1_exp_data_plot        = []
+        y1_exp_data_plot        = []
+        x2_exp_data_plot        = []
+        y2_exp_data_plot        = []
+        y1_calc_data_plot       = []
+        y2_calc_data_plot       = []
+        temperature_K_data_plot = []
+
+        for k in range(len(x1_exp_data)):
+
+            temperature_K = temperature_K_data[k]
+            pressure_Pa = pressure_Pa_data[k]
+            x1_exp = x1_exp_data[k] 
+            y1_exp = y1_exp_data[k]
+
+            if self.activity_model.upper() == 'WILSON':
+                lambda_12 = self._DIPPR_4p_polynomial_Wilson(coeffs = self.DIPPR_polynomial_coeffs['Lambda_12'],
+                                                                temperature_K = temperature_K)
+                lambda_21 = self._DIPPR_4p_polynomial_Wilson(coeffs = self.DIPPR_polynomial_coeffs['Lambda_21'],
+                                                                temperature_K = temperature_K)
+                
+                gamma_1_calc, gamma_2_calc = self.activity_model_backend.get_activity_coefs(lambda_12 = lambda_12,
+                                                                                            lambda_21 = lambda_21,
+                                                                                            x_val = x1_exp)
+
+                if self.equation_of_state is not None:
+                    fugacity_coef_1, fugacity_coef_2  = self.eos_backend.get_fugacity_coefs(temperature_K = temperature_K,
+                                                                                                pressure_Pa = pressure_Pa,
+                                                                                                molar_composition = np.array([y1_exp, 1 - y1_exp])) 
+                else: 
+                    fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   # ideal gas assumption if no EoS backend is specified
+
+                try: 
+                    saturation_pressure_Pa_1 = PropsSI('P','T',temperature_K,'Q',1,CAS_from_any(self.components[0]))
+                    saturation_pressure_Pa_2 = PropsSI('P','T',temperature_K,'Q',1,CAS_from_any(self.components[1]))
+                except:       
+                    continue
+
+                y1_calc = x1_exp * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
+                y2_calc = (1 - x1_exp) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
+
+                x1_exp_data_plot.append(x1_exp)
+                y1_exp_data_plot.append(y1_exp)
+                x2_exp_data_plot.append(x1_exp)
+                y2_exp_data_plot.append(y1_exp)
+                y1_calc_data_plot.append(y1_calc)
+                y2_calc_data_plot.append(y2_calc)
+                
+        # Estimating R2 coeffcients  
+        slope_y1, intercept_y1, r_value_y1, p_value_y1, std_err_y1 = linregress(y1_exp_data_plot, y1_calc_data_plot)
+
+        if get_parity_plot is True: 
+            plt.figure(figsize=(6,6))
+            plt.scatter(y1_exp_data_plot, y1_calc_data_plot, color='red', label=f'y_{self.components[0]}')
+            plt.plot([0, 1], [0, 1], 'k--', label='reference line')
+            plt.xlabel(f'Experimental y_{self.components[0]}')
+            plt.ylabel(f'Calculated y_{self.components[0]}')
+            plt.title(f'Parity Plot for VLE of {self.components[0]} and {self.components[1]} \n'
+                    f'R2 {self.components[0]} =  {r_value_y1**2:.3f}')   
+            plt.xlim(0, 1)
+            plt.ylim(0, 1)
+            plt.legend()
+            plt.show()
+
+        if get_VLE_curve is True: 
+            plt.figure(figsize=(6,6))
+            plt.scatter(x1_exp_data_plot, y1_exp_data_plot, color='red', label=f'exp data for {self.components[0]}')
+            plt.plot(x1_exp_data_plot, y1_calc_data_plot, color='blue', label=f'calc data for {self.components[0]}')
+            plt.plot([0, 1], [0, 1], 'k--', label='y=x')
+            plt.xlabel(f'x_{self.components[0]}')
+            plt.ylabel(f'y_{self.components[0]}')
+            plt.title(f'VLE curve for {self.components[0]} and {self.components[1]}')   
+            plt.xlim(0, 1)
+            plt.ylim(0, 1)
+            plt.legend()
+            plt.show()
+
+            pass 
         
 
+
         pass
+
+
