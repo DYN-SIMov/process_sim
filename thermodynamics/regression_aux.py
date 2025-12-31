@@ -5,10 +5,17 @@ import matplotlib.pyplot as plt
 
 from typing import Protocol
 
-from itertools import takewhile             # for parsing
-from scipy.optimize import minimize         # for regression 
-from scipy.stats import linregress          # for R2 calculation
-from termcolor import colored               # for colored text output
+from itertools import takewhile                           # for parsing
+from scipy.optimize import minimize as sp_minimize        # for regression 
+from scipy.stats import linregress                        # for R2 calculation
+from termcolor import colored                             # for colored text output
+
+# for regression of DIPPR parameters directly from VLE data
+from pymoo.core.problem import Problem
+from pymoo.algorithms.soo.nonconvex.ga import GA
+from pymoo.optimize import minimize as pymoo_minimize
+from joblib import Parallel as JoblibParallel
+from joblib import delayed as joblib_delayed
 
 from CoolProp.CoolProp import PropsSI
 from chemicals import CAS_from_any
@@ -153,11 +160,52 @@ class WilsonActivityModel():
 
 
 
-
 class NRTLActivityModel():
     def activity_coefs(self, x, T, params):
         # Implement NRTL model equations here
         pass
+
+
+class DIPPR_polynomial_regression_GA(Problem):
+    def __init__(self, 
+                 number_of_parameters,
+                 lower_bounds,
+                 upper_bounds, 
+                 objective_function,
+                 n_jobs = 1,
+                 backend = 'loky', 
+                 **kwargs):
+        
+        self.objective_function = objective_function
+        self.n_jobs = n_jobs
+        self.backend = backend
+
+        super().__init__(
+            n_var=number_of_parameters,
+            n_obj=1,
+            n_ieq_constr=0,
+            xl=lower_bounds,
+            xu=upper_bounds,
+            **kwargs,
+        )
+
+
+    def _evaluate_safely(self,coeffs): 
+
+        try: 
+            objective_function_val = self.objective_function(coeffs)
+        except: 
+            objective_function_val = 1e20
+
+        return objective_function_val
+
+
+    def _evaluate(self, X, out, *args, **kwargs):
+
+        F = JoblibParallel(n_jobs=self.n_jobs, backend=self.backend)(
+            joblib_delayed(self._evaluate_safely)(x) for x in X)
+
+        out["F"] = np.asarray(F, dtype=float).reshape(-1, 1)
 
 
 
@@ -169,6 +217,8 @@ class BinaryInteractionParametersRegression():
 
         self.activity_model = activity_model
         self.equation_of_state = equation_of_state
+        
+        self.data_set: dict = None
 
 
     def _parse_components_from_comment(self, filepath: str) -> list[str]:
@@ -336,6 +386,44 @@ class BinaryInteractionParametersRegression():
         pass 
 
 
+    def _get_saturation_pressure_values(self, 
+                                        components:list) -> None: 
+        
+
+        """ 
+        The method's objectives are twofold: 
+        1) get saturation pressures (in Pa) for each component at each value of the temperature in the avaialble VLE data set
+        using CoolProp library 
+        2) filter out VLE data points at temperatures for which saturation pressure could not have been evaluated 
+        (typically when VLE temperature point is above component's critical temperature)
+        """
+
+        filtered_data_sets = []
+
+        for data_set in self.data_set: 
+
+            temperature_K = data_set['temperature_K']
+
+            try: 
+                saturation_pressure_Pa_1 = PropsSI('P','T',temperature_K,'Q',1,CAS_from_any(components[0]))
+                saturation_pressure_Pa_2 = PropsSI('P','T',temperature_K,'Q',1,CAS_from_any(components[1]))
+
+                data_set['saturation_pressure_Pa_1'] = saturation_pressure_Pa_1
+                data_set['saturation_pressure_Pa_2'] = saturation_pressure_Pa_2
+                
+                filtered_data_sets.append(data_set)
+            except:
+                msg = (f" Saturation pressure calculation failed for T = {temperature_K:.2f} K. "
+                        f" Skipping this data point." 
+                        f" Check if critical temperature is exceeded or if components are not supported by CoolProp. ")
+                print(colored(msg, 'yellow'))
+                continue
+
+        self.data_set = filtered_data_sets
+        
+        pass 
+
+
     def data_import(self, filepath: str) -> None:
 
         if filepath is None: 
@@ -351,6 +439,7 @@ class BinaryInteractionParametersRegression():
         self._detect_data(data = data)
         self._configure_activity_model_backend(components=components)
         self._configure_eos_backend(components=components)
+        self._get_saturation_pressure_values(components=components)
 
         pass
 
@@ -362,25 +451,15 @@ class BinaryInteractionParametersRegression():
 
         for data_set in self.data_set:
 
-            try: 
-                saturation_pressure_Pa_1 = PropsSI('P','T',data_set['temperature_K'],'Q',1,CAS_from_any(self.components[0]))
-                saturation_pressure_Pa_2 = PropsSI('P','T',data_set['temperature_K'],'Q',1,CAS_from_any(self.components[1]))
-            except:
-                msg = (f" Saturation pressure calculation failed for T = {data_set['temperature_K']:.2f} K. "
-                        f" Skipping this data point." 
-                        f" Check if critical temperature is exceeded or if components are not supported by CoolProp. ")
-                print(colored(msg, 'yellow'))
-                break
-
             regression_params = {'y1': data_set['y_data'],
                                  'x1': data_set['x_data'],
-                                 'saturation_pressure_Pa_1': saturation_pressure_Pa_1,
-                                 'saturation_pressure_Pa_2': saturation_pressure_Pa_2,
+                                 'saturation_pressure_Pa_1': data_set['saturation_pressure_Pa_1'],
+                                 'saturation_pressure_Pa_2': data_set['saturation_pressure_Pa_2'],
                                  'pressure_Pa': data_set['pressure_Pa'],
                                  'temperature_K': data_set['temperature_K'],
                                  'eos_backend': self.eos_backend if self.equation_of_state is not None else None}
 
-            result = minimize(fun = self.activity_model_backend.objective_function,
+            result = sp_minimize(fun = self.activity_model_backend.objective_function,
                               x0 = self.activity_model_backend.initial_guess(initial_guess=opt_data_results[-1] 
                                                                             if len(opt_data_results) > 0 else None),
                               args = (regression_params),
@@ -398,7 +477,7 @@ class BinaryInteractionParametersRegression():
         pass
 
 
-    @ staticmethod
+    @staticmethod
     def _DIPPR_4p_polynomial_Wilson(coeffs,
                                     temperature_K) -> float:
 
@@ -415,10 +494,10 @@ class BinaryInteractionParametersRegression():
         return Lambda_ij_calc
 
 
-    def _DIPPR_4p_polynomial_Wilson_objective_function(self, 
-                                                       coeffs: np.ndarray,
-                                                       temperature_K_data: np.ndarray,
-                                                       bip_data: np.ndarray) -> float:
+    def _objective_function_for_DIPPR_4p_polynomial_elementwise(self, 
+                                                                coeffs: np.ndarray,
+                                                                temperature_K_data: np.ndarray,
+                                                                bip_data: np.ndarray) -> float:
         " Objective function for DIPPR polynomial regression of Wilson BIP parameters. "
         
         error_data = []
@@ -433,6 +512,9 @@ class BinaryInteractionParametersRegression():
 
 
     def estimate_DIPPR_polynomial_from_elementwise_optimisation(self) -> None:
+
+        " Method for regressing DIPPR polynomial parameters based on results of elementwise "
+        " regression of Wilson Binary Interaction Parameters"
         
         if self.elementwise_opt_results is None:
             raise ValueError(" Elementwise optimisation results not found. "
@@ -451,13 +533,13 @@ class BinaryInteractionParametersRegression():
                 lambda_12_data.append(opt_result[0])
                 lambda_21_data.append(opt_result[1])
 
-            results_12 = minimize(fun = self._DIPPR_4p_polynomial_Wilson_objective_function,
+            results_12 = sp_minimize(fun = self._objective_function_for_DIPPR_4p_polynomial_elementwise,
                                   x0 = np.array([0.0, 0.0, 0.0, 0.0]),
                                   args = (np.array(temperature_K_data), np.array(lambda_12_data)),
                                   method = 'SLSQP',
                                   bounds = ((-1e3,1e3),(-1e3,1e3),(-1e3,1e3),(-1e0,1e0)))
             
-            results_21 = minimize(fun = self._DIPPR_4p_polynomial_Wilson_objective_function,
+            results_21 = sp_minimize(fun = self._objective_function_for_DIPPR_4p_polynomial_elementwise,
                                   x0 = np.array([0.0, 0.0, 0.0, 0.0]),
                                   args = (np.array(temperature_K_data), np.array(lambda_21_data)),
                                   method = 'SLSQP',
@@ -487,6 +569,115 @@ class BinaryInteractionParametersRegression():
 
         
         pass
+
+    
+    def _objective_function_for_DIPPR_4p_polynomial_from_VLE(self,
+                                                             x:np.ndarray) -> float: 
+
+        A1, B1, C1, D1 = x[:4]
+        A2, B2, C2, D2 = x[4:]
+        
+        temperature_K_data = []
+        pressure_Pa_data = []
+        saturation_pressure_Pa_1_data = []
+        saturation_pressure_Pa_2_data = []
+        x1_exp_data = [] 
+        y1_exp_data = [] 
+        
+        objective_function_values = []
+
+        for data_set in self.data_set:
+
+            x1_exp_data.extend(data_set['x_data'])
+            y1_exp_data.extend(data_set['y_data'])
+            temperature_K_data.extend([data_set['temperature_K']] * len(data_set['x_data']))
+            pressure_Pa_data.extend(data_set['pressure_Pa'])
+            saturation_pressure_Pa_1_data.extend([data_set['saturation_pressure_Pa_1']] * len(data_set['x_data']))
+            saturation_pressure_Pa_2_data.extend([data_set['saturation_pressure_Pa_2']]* len(data_set['x_data']))
+            
+            pass
+            
+
+        for k in range(0,len(temperature_K_data)): 
+
+            temperature_K = temperature_K_data[k]
+            pressure_Pa = pressure_Pa_data[k]
+            x1_exp = x1_exp_data[k]
+            y1_exp = y1_exp_data[k]
+            y2_exp = 1.0 - y1_exp
+            saturation_pressure_Pa_1 = saturation_pressure_Pa_1_data[k]
+            saturation_pressure_Pa_2 = saturation_pressure_Pa_2_data[k]
+
+
+            lambda_12 = self._DIPPR_4p_polynomial_Wilson(coeffs = [A1, B1, C1, D1],
+                                                         temperature_K = temperature_K)
+            lambda_21 = self._DIPPR_4p_polynomial_Wilson(coeffs = [A2, B2, C2, D2],
+                                                         temperature_K = temperature_K)
+            
+            gamma_1_calc, gamma_2_calc = self.activity_model_backend.get_activity_coefs(lambda_12 = lambda_12,
+                                                                                        lambda_21 = lambda_21,
+                                                                                        x_val = x1_exp)
+            
+            if self.equation_of_state is not None:
+                fugacity_coef_1, fugacity_coef_2  = self.eos_backend.get_fugacity_coefs(temperature_K = temperature_K,
+                                                                                        pressure_Pa = pressure_Pa,
+                                                                                        molar_composition = np.array([y1_exp, y2_exp])) 
+            else: 
+                fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])  
+
+            y1_calc = x1_exp * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
+            y2_calc = (1 - x1_exp) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
+
+
+            objective_function_values.append(
+                (y1_calc - y1_exp)**2 + (y2_calc - y2_exp)**2
+            )
+     
+        return sum(objective_function_values) 
+
+
+    def estimate_DIPPR_polynomial_from_VLE_data(self): 
+
+        
+
+        problem = DIPPR_polynomial_regression_GA(objective_function=self._objective_function_for_DIPPR_4p_polynomial_from_VLE,
+                                                 number_of_parameters=8,
+                                                 lower_bounds=[-1e3,-1e3,-1e3,-1e0,-1e3,-1e3,-1e3,-1e0],
+                                                 upper_bounds=[ 1e3, 1e3, 1e3, 1e0, 1e3, 1e3, 1e3, 1e0],
+                                                 n_jobs=1)
+
+        algorithm = GA(pop_size=200,
+                       eliminate_duplicates=True,
+        )
+        
+        results = pymoo_minimize(problem,
+                             algorithm,
+                             termination=("n_gen", 200),
+                             seed=1,
+                             verbose=True,
+        )
+        
+        if results.message is None:
+            self.DIPPR_polynomial_coeffs = {
+                'Lambda_12': results.X[:4],
+                'Lambda_21': results.X[4:]
+            }
+
+            msg = (f"\n DIPPR 4th order polynomial regression of Wilson BIP parameters converged successfully. \n"
+                    f" Fitted coefficients for Lambda_12: A = {results.X[0]:.4f}, B = {results.X[1]:.4f}, "
+                    f"C = {results.X[2]:.4f}, D = {results.X[3]:.4f}."
+                    f" Residual = {results.F[0]:.4e}. "
+                    f"\n Fitted coefficients for Lambda_21: A = {results.X[4]:.4f}, B = {results.X[5]:.4f}, "
+                    f"C = {results.X[6]:.4f}, D = {results.X[7]:.4f}. "
+                    f" Residual = {results.F[0]:.4e}. ")
+            print(colored(msg, 'green'))
+        else: 
+            raise RuntimeError(" DIPPR polynomial regression of Wilson BIP parameters did not converge. ")
+
+
+
+        pass
+
 
 
     def record_regression_results(self) -> None:
