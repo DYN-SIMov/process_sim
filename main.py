@@ -1,7 +1,7 @@
 import numpy as np 
 from core import Stream
-from properties import GammaPhiPackage
-from properties import SoaveRedlichKwongEoSBackend, WilsonActivityModel
+from thermodynamics.core.properties import GammaPhiPackage
+from thermodynamics.core.properties import SoaveRedlichKwongEoSBackend, WilsonActivityModel
 
 
 if __name__ == "__main__":

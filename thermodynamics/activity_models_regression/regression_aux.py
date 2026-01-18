@@ -12,6 +12,7 @@ from termcolor import colored                             # for colored text out
 
 # for regression of DIPPR parameters directly from VLE data
 from pymoo.core.problem import Problem
+from pymoo.core.population import Population
 from pymoo.algorithms.soo.nonconvex.ga import GA
 from pymoo.optimize import minimize as pymoo_minimize
 from joblib import Parallel as JoblibParallel
@@ -22,8 +23,10 @@ from chemicals import CAS_from_any
 
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from properties import SoaveRedlichKwongEoSBackend, PureComponentDataBackend
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from thermodynamics.core.properties import SoaveRedlichKwongEoSBackend, PureComponentDataBackend
+
+from optimization import DIPPR_polynomial_regression_GA
 
 
 class ActivityModelInterface(Protocol):
@@ -38,7 +41,9 @@ class WilsonActivityModel():
                            lambda_21: float,
                            x_val: np.ndarray) -> np.ndarray:
 
-        " Returns arrays of activity coefficients based on Wilson equations. "
+        """
+        Method to get activity coeffcients (gamma_1 and gamma_2) based on Wilson equation
+        """
 
         x_1 = x_val
         x_2 = 1 - x_val
@@ -61,11 +66,13 @@ class WilsonActivityModel():
         return gamma_1, gamma_2
     
 
-    def objective_function(self, 
-                           theta: np.ndarray,
-                           regression_params) -> float:
+    def objective_function_elementwise(self, 
+                                       theta: np.ndarray,
+                                       regression_params) -> float:
 
-        " Objective function to minimize for Wilson BIP parameters estimation. "
+        """
+        Objective function for elementwise estimation of Wilson BIP parameters 
+        """
 
         lambda_12 = theta[0]
         lambda_21 = theta[1]
@@ -114,19 +121,42 @@ class WilsonActivityModel():
     
 
     @staticmethod
-    def initial_guess(initial_guess) -> np.ndarray:
+    def initial_guess_elementwise(initial_guess) -> np.ndarray:
         
+        """
+        Method to specify initial guess input for the elementwise estimation of Wilson BIPs
+        """
+
         if initial_guess is None:
             return np.array([1.0, 1.0])
         else:
             return initial_guess
         
+    
+    @staticmethod
+    def get_bounds_elementwise() -> tuple:
+
+        """
+        Method to get bounds for elementwise estimation of Wilson BIP
+        """
+
+        Lambda_12_bounds = (1e-3, None)
+        Lambda_21_bounds = (1e-3, None)
+        
+        bounds = (Lambda_12_bounds, Lambda_21_bounds)
+
+        return bounds
+
 
     @staticmethod
-    def get_message(regression_params: dict,
-                    components: list[str],
-                    result) -> None:
+    def get_message_elementwise(regression_params: dict,
+                                components: list[str],
+                                result) -> None:
         
+        """
+        Method to print a interim results of the elementwise estimation of Wilson activity coefficients
+        """
+
         temperature_K = regression_params['temperature_K']
         pressure_atm  = regression_params['pressure_Pa'] / 1e5
         x1_val = regression_params['x1']
@@ -166,48 +196,6 @@ class NRTLActivityModel():
         pass
 
 
-class DIPPR_polynomial_regression_GA(Problem):
-    def __init__(self, 
-                 number_of_parameters,
-                 lower_bounds,
-                 upper_bounds, 
-                 objective_function,
-                 n_jobs = 1,
-                 backend = 'loky', 
-                 **kwargs):
-        
-        self.objective_function = objective_function
-        self.n_jobs = n_jobs
-        self.backend = backend
-
-        super().__init__(
-            n_var=number_of_parameters,
-            n_obj=1,
-            n_ieq_constr=0,
-            xl=lower_bounds,
-            xu=upper_bounds,
-            **kwargs,
-        )
-
-
-    def _evaluate_safely(self,coeffs): 
-
-        try: 
-            objective_function_val = self.objective_function(coeffs)
-        except: 
-            objective_function_val = 1e20
-
-        return objective_function_val
-
-
-    def _evaluate(self, X, out, *args, **kwargs):
-
-        F = JoblibParallel(n_jobs=self.n_jobs, backend=self.backend)(
-            joblib_delayed(self._evaluate_safely)(x) for x in X)
-
-        out["F"] = np.asarray(F, dtype=float).reshape(-1, 1)
-
-
 
 class BinaryInteractionParametersRegression(): 
 
@@ -218,7 +206,7 @@ class BinaryInteractionParametersRegression():
         self.activity_model = activity_model
         self.equation_of_state = equation_of_state
         
-        self.data_set: dict = None
+        self.data_set: dict = None        # data_set is a dict where each entry stores data points taken at a specific temperature
 
 
     def _parse_components_from_comment(self, filepath: str) -> list[str]:
@@ -444,6 +432,47 @@ class BinaryInteractionParametersRegression():
         pass
 
     
+    def get_all_data_points(self) -> dict: 
+
+        """
+        Method to collect all relevant parameters for all the datapoints in a single dict
+        """
+
+        temperature_K_data = []
+        pressure_Pa_data = []
+        saturation_pressure_Pa_1_data = []
+        saturation_pressure_Pa_2_data = []
+        x1_exp_data = [] 
+        x2_exp_data = []
+        y1_exp_data = []
+        y2_exp_data = [] 
+        
+        for data_set in self.data_set:
+
+            x1_exp_data.extend(data_set['x_data'])
+            x2_exp_data.extend(np.subtract(1.0,data_set['x_data']))           
+            y1_exp_data.extend(data_set['y_data'])
+            y2_exp_data.extend(np.subtract(1.0,data_set['y_data'])) 
+            temperature_K_data.extend([data_set['temperature_K']] * len(data_set['x_data']))
+            pressure_Pa_data.extend(data_set['pressure_Pa'])
+            saturation_pressure_Pa_1_data.extend([data_set['saturation_pressure_Pa_1']] * len(data_set['x_data']))
+            saturation_pressure_Pa_2_data.extend([data_set['saturation_pressure_Pa_2']] * len(data_set['x_data']))
+            
+        
+        data_all_points = {
+            'temperature_K_data': temperature_K_data,
+            'pressure_Pa_data': pressure_Pa_data,
+            'saturation_pressure_Pa_1_data': saturation_pressure_Pa_1_data,
+            'saturation_pressure_Pa_2_data': saturation_pressure_Pa_2_data,
+            'x1_exp_data': x1_exp_data,
+            'x2_exp_data': x2_exp_data,            
+            'y1_exp_data': y1_exp_data,
+            'y2_exp_data': y2_exp_data,
+        }
+
+        return data_all_points
+
+
     def regress_BIP_parameters_elementwise(self) -> None:
         " Function to regress Wilson BIP parameters for each temperature point (i.e., data_set) individually. "
 
@@ -459,16 +488,16 @@ class BinaryInteractionParametersRegression():
                                  'temperature_K': data_set['temperature_K'],
                                  'eos_backend': self.eos_backend if self.equation_of_state is not None else None}
 
-            result = sp_minimize(fun = self.activity_model_backend.objective_function,
-                              x0 = self.activity_model_backend.initial_guess(initial_guess=opt_data_results[-1] 
-                                                                            if len(opt_data_results) > 0 else None),
-                              args = (regression_params),
-                              method = 'SLSQP',
-                              bounds=((1e-3, None), (1e-3, None))) # NOTE define dedicated bounds based on activity model
+            result = sp_minimize(fun = self.activity_model_backend.objective_function_elementwise,
+                                 x0 = self.activity_model_backend.initial_guess_elementwise(initial_guess=opt_data_results[-1] 
+                                                                                            if len(opt_data_results) > 0 else None),
+                                 args = (regression_params),
+                                 method = 'SLSQP',
+                                 bounds=self.activity_model_backend.get_bounds_elementwise) 
 
-            msg = self.activity_model_backend.get_message(result=result,
-                                                            regression_params=regression_params,
-                                                            components=self.components)
+            msg = self.activity_model_backend.get_message_elementwise(result=result,
+                                                                      regression_params=regression_params,
+                                                                      components=self.components)
 
             opt_data_results.append(result.x)
 
@@ -536,13 +565,13 @@ class BinaryInteractionParametersRegression():
             results_12 = sp_minimize(fun = self._objective_function_for_DIPPR_4p_polynomial_elementwise,
                                   x0 = np.array([0.0, 0.0, 0.0, 0.0]),
                                   args = (np.array(temperature_K_data), np.array(lambda_12_data)),
-                                  method = 'SLSQP',
+                                  method = 'Nelder-Mead',
                                   bounds = ((-1e3,1e3),(-1e3,1e3),(-1e3,1e3),(-1e0,1e0)))
             
             results_21 = sp_minimize(fun = self._objective_function_for_DIPPR_4p_polynomial_elementwise,
                                   x0 = np.array([0.0, 0.0, 0.0, 0.0]),
                                   args = (np.array(temperature_K_data), np.array(lambda_21_data)),
-                                  method = 'SLSQP',
+                                  method = 'Nelder-Mead',
                                   bounds = ((-1e3,1e3),(-1e3,1e3),(-1e3,1e3),(-1e0,1e0)))
             
             if results_12.success and results_21.success:
@@ -593,9 +622,11 @@ class BinaryInteractionParametersRegression():
             temperature_K_data.extend([data_set['temperature_K']] * len(data_set['x_data']))
             pressure_Pa_data.extend(data_set['pressure_Pa'])
             saturation_pressure_Pa_1_data.extend([data_set['saturation_pressure_Pa_1']] * len(data_set['x_data']))
-            saturation_pressure_Pa_2_data.extend([data_set['saturation_pressure_Pa_2']]* len(data_set['x_data']))
+            saturation_pressure_Pa_2_data.extend([data_set['saturation_pressure_Pa_2']] * len(data_set['x_data']))
             
             pass
+
+        test = self.get_all_data_points()
             
 
         for k in range(0,len(temperature_K_data)): 
@@ -603,6 +634,7 @@ class BinaryInteractionParametersRegression():
             temperature_K = temperature_K_data[k]
             pressure_Pa = pressure_Pa_data[k]
             x1_exp = x1_exp_data[k]
+            x2_exp = 1.0 - x1_exp
             y1_exp = y1_exp_data[k]
             y2_exp = 1.0 - y1_exp
             saturation_pressure_Pa_1 = saturation_pressure_Pa_1_data[k]
@@ -626,11 +658,13 @@ class BinaryInteractionParametersRegression():
                 fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])  
 
             y1_calc = x1_exp * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
-            y2_calc = (1 - x1_exp) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
+            y2_calc = x2_exp * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
 
+            weight = np.abs(0.5 - x1_exp) * 10
 
             objective_function_values.append(
-                (y1_calc - y1_exp)**2 + (y2_calc - y2_exp)**2
+                ((y1_calc - y1_exp) / y1_exp)**2 * weight + 
+                ((y2_calc - y2_exp) / y2_exp)**2 * weight
             )
      
         return sum(objective_function_values) 
@@ -638,7 +672,9 @@ class BinaryInteractionParametersRegression():
 
     def estimate_DIPPR_polynomial_from_VLE_data(self): 
 
-        
+
+
+        # NOTE: continue from here
 
         problem = DIPPR_polynomial_regression_GA(objective_function=self._objective_function_for_DIPPR_4p_polynomial_from_VLE,
                                                  number_of_parameters=8,
@@ -646,13 +682,26 @@ class BinaryInteractionParametersRegression():
                                                  upper_bounds=[ 1e3, 1e3, 1e3, 1e0, 1e3, 1e3, 1e3, 1e0],
                                                  n_jobs=1)
 
-        algorithm = GA(pop_size=200,
+        init_pop_single = np.random.uniform(low=[-1e3,-1e3,-1e3,-1e0],
+                                            high=[ 1e3, 1e3, 1e3, 1e0],
+                                            size=(500,4))
+        init_pop_total = []
+
+        for k in range(len(init_pop_single)): 
+            init_pop_total.append(np.insert(arr=init_pop_single[k],
+                                            obj=0,
+                                            values=init_pop_single[k]))
+            
+        init_pop_pymoo = Population.new("X", init_pop_total)
+
+
+        algorithm = GA(pop_size=500,
                        eliminate_duplicates=True,
-        )
+                       sampling=init_pop_pymoo)
         
         results = pymoo_minimize(problem,
                              algorithm,
-                             termination=("n_gen", 200),
+                             termination=("n_gen", 2000),
                              seed=1,
                              verbose=True,
         )

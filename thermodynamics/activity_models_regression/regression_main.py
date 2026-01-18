@@ -1,18 +1,25 @@
 
+from data_handling import VLEData
 from regression_aux import BinaryInteractionParametersRegression
 
-if __name__ == '__main__': 
 
+def main():
+
+    VLE_data = VLEData(filepath = 'thermodynamics/activity_models_regression/thermo_data/VLE_H2O_NH3.csv')
     wilson_BIP_estimator = BinaryInteractionParametersRegression(activity_model='wilson',
                                                                  equation_of_state='srk',)
-    wilson_BIP_estimator.data_import(filepath = 'thermodynamics/thermo_data/VLE_H2O_NH3.csv')
-    wilson_BIP_estimator.regress_BIP_parameters_elementwise()
+    # wilson_BIP_estimator.regress_BIP_parameters_elementwise()
     # wilson_BIP_estimator.estimate_DIPPR_polynomial_from_elementwise_optimisation()
-    wilson_BIP_estimator.estimate_DIPPR_polynomial_from_VLE_data()
-    wilson_BIP_estimator.results_visualization(get_parity_plot=True,
-                                               get_VLE_curve=True)
+    # wilson_BIP_estimator.estimate_DIPPR_polynomial_from_VLE_data()
+    # wilson_BIP_estimator.results_visualization(get_parity_plot=True,
+    #                                            get_VLE_curve=True)
 
     pass
+
+
+if __name__ == "__main__": 
+    main()
+
 
 
 " TODO: "
