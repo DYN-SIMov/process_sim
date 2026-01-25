@@ -1,14 +1,24 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from thermodynamics.core.properties import SoaveRedlichKwongEoSBackend
 
 from data_handling import VLEData
 from regression_aux import BinaryInteractionParametersRegression
+from activity_models_aux import WilsonActivityModelRegression
+from optimization import PolynomialExponentialDIPPR
+
 
 
 def main():
 
     VLE_data = VLEData(filepath = 'thermodynamics/activity_models_regression/thermo_data/VLE_H2O_NH3.csv')
-    wilson_BIP_estimator = BinaryInteractionParametersRegression(activity_model='wilson',
-                                                                 equation_of_state='srk',)
-    # wilson_BIP_estimator.regress_BIP_parameters_elementwise()
+    wilson_BIP_estimator = BinaryInteractionParametersRegression(activity_model_regression=WilsonActivityModelRegression,
+                                                                 equation_of_state=SoaveRedlichKwongEoSBackend,
+                                                                 VLE_data=VLE_data,
+                                                                 polynomial=PolynomialExponentialDIPPR(degree=4))
+    wilson_BIP_estimator.regress_BIP_parameters_elementwise()
+    wilson_BIP_estimator.estimate_polynomial_from_elementwise_optimisation()
     # wilson_BIP_estimator.estimate_DIPPR_polynomial_from_elementwise_optimisation()
     # wilson_BIP_estimator.estimate_DIPPR_polynomial_from_VLE_data()
     # wilson_BIP_estimator.results_visualization(get_parity_plot=True,
