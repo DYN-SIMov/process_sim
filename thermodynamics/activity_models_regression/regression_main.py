@@ -12,7 +12,9 @@ from optimization import PolynomialExponentialDIPPR
 
 def main():
 
-    VLE_data = VLEData(filepath = 'thermodynamics/activity_models_regression/thermo_data/VLE_H2O_NH3.csv')
+    VLE_data = VLEData(filepath = 'thermodynamics/activity_models_regression/thermo_data/VLE_isobaric_MeOH_H2O.csv')
+    # VLE_data = VLEData(filepath = 'thermodynamics/activity_models_regression/thermo_data/VLE_H2O_NH3.csv')
+    
     wilson_BIP_estimator = BinaryInteractionParametersRegression(activity_model_regression=WilsonActivityModelRegression,
                                                                  equation_of_state=SoaveRedlichKwongEoSBackend,
                                                                  VLE_data=VLE_data,
@@ -21,8 +23,8 @@ def main():
     wilson_BIP_estimator.estimate_polynomial_from_elementwise_optimisation()
     # wilson_BIP_estimator.estimate_DIPPR_polynomial_from_elementwise_optimisation()
     # wilson_BIP_estimator.estimate_DIPPR_polynomial_from_VLE_data()
-    # wilson_BIP_estimator.results_visualization(get_parity_plot=True,
-    #                                            get_VLE_curve=True)
+    wilson_BIP_estimator.results_visualization(get_parity_plot=True,
+                                               get_VLE_curve=True)
 
     pass
 

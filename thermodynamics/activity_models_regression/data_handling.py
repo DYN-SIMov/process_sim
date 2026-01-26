@@ -78,10 +78,13 @@ class RawExperimentalData(list[DataPoint]):
             raise VLEDataError(" No data points available to search for constant temperature points. ")
  
         reference_temperature_data = [self.data_points[0].temperature_K]
-        for point in self.data_points:
+        for point in self.data_points:  
             detected_temp_diff = np.abs(np.array(reference_temperature_data) - point.temperature_K)
             if np.all(detected_temp_diff > temperature_K_tol):
-                T_x_y_points.append(TxyPoint(data_points = constant_temperature_points))
+                T_x_y_points.append(
+                    TxyPoint(data_points = constant_temperature_points) if constant_temperature_points 
+                        else TxyPoint(data_points = [point])
+                        )
                 constant_temperature_points = []
                 reference_temperature_data.append(point.temperature_K)
             else:

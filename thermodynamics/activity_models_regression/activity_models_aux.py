@@ -46,13 +46,15 @@ class WilsonActivityModelRegression(WilsonActivityModel):
 
 
     @staticmethod
-    def get_activity_coefs(lambda_12: float,
-                           lambda_21: float,
+    def get_activity_coefs(theta: np.ndarray,
                            x_val: np.ndarray) -> np.ndarray:
 
         """
         Method to get activity coeffcients (gamma_1 and gamma_2) based on Wilson equation
         """
+
+        lambda_12 = theta[0]
+        lambda_21 = theta[1]
 
         x_1 = x_val
         x_2 = 1 - x_val
@@ -83,9 +85,6 @@ class WilsonActivityModelRegression(WilsonActivityModel):
         Objective function for elementwise estimation of Wilson BIP parameters 
         """
 
-        lambda_12 = theta[0]
-        lambda_21 = theta[1]
-
         x_exp_data = regression_params['x1']
         y_exp_data = regression_params['y1']
         pressure_Pa_data = regression_params['pressure_Pa']
@@ -99,8 +98,7 @@ class WilsonActivityModelRegression(WilsonActivityModel):
             x_exp_val = x_exp_data[k]
             y_exp_val = y_exp_data[k]
             pressure_Pa = pressure_Pa_data[k]
-            gamma_1_calc, gamma_2_calc = self.get_activity_coefs(lambda_12 = lambda_12,
-                                                                 lambda_21 = lambda_21,
+            gamma_1_calc, gamma_2_calc = self.get_activity_coefs(theta=theta,
                                                                  x_val = x_exp_val)
 
             if eos_backed is not None:

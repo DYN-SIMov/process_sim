@@ -87,7 +87,7 @@ class PolynomialExponentialElementwiseEstimator():
                                         x0 = np.repeat(0.0, self.polynomial.degree),
                                         method = 'Nelder-Mead',
                                         args = (current_BIP_count),
-                                        bounds = ((-1e3,1e3),(-1e3,1e3),(-1e3,1e3),(-1e0,1e0)))
+                                        bounds = ((-1e4,1e4),(-1e4,1e4),(-1e3,1e3),(-1e0,1e0)))
 
             if current_esitmation_run.success:
                 BIP_coeffs_estimation_results.append(current_esitmation_run)
@@ -98,10 +98,6 @@ class PolynomialExponentialElementwiseEstimator():
 
         return BIP_coeffs_estimation_results
 
-
-
-
-        pass
 
 
 

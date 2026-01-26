@@ -31,9 +31,11 @@ class BinaryInteractionParametersRegression():
     def __init__(self,
                  activity_model_regression: ActivityModelRegressionInterface = None,
                  equation_of_state: EquationOfStateInterface = None,
-                 VLE_data: VLEData = None) -> None: 
+                 VLE_data: VLEData = None,
+                 polynomial: PolynomialExponentialDIPPR = None) -> None: 
 
         self.VLE_data = VLE_data
+        self.polynomial = polynomial
         
         pure_component_data_backend = PureComponentDataBackend(components=self.VLE_data.components)
         self.eos_backend = equation_of_state(components=self.VLE_data.components,
@@ -42,7 +44,7 @@ class BinaryInteractionParametersRegression():
                                                                 pure_component_data_backend=pure_component_data_backend)
         
         self.elementwise_opt_results: list = None
-        self.DIPPR_polynomial_coeffs: dict = None
+        self.BIP_polynomial_coeffs: dict = None
 
         pass
         
@@ -102,7 +104,7 @@ class BinaryInteractionParametersRegression():
                                                                              estimation_results=estimation_results)
 
         BIP_coeffs = [estimation_results[k].x for k in range(len(estimation_results))]
-        self.DIPPR_polynomial_coeffs = BIP_coeffs
+        self.BIP_polynomial_coeffs = BIP_coeffs
         
         pass
 
@@ -245,12 +247,16 @@ class BinaryInteractionParametersRegression():
         pressure_Pa_data = []
         x1_exp_data = []
         y1_exp_data = []
+        saturation_pressure_Pa_1_data = []
+        saturation_pressure_Pa_2_data = []
 
-        for data_set in self.data_set:
-            x1_exp_data.extend(data_set['x_data'])
-            y1_exp_data.extend(data_set['y_data'])
-            temperature_K_data.extend([data_set['temperature_K']] * len(data_set['x_data']))
-            pressure_Pa_data.extend(data_set['pressure_Pa'])
+        for T_x_y_point in self.VLE_data.T_x_y_points:
+            x1_exp_data.extend([datum.x1_mol_frac for datum in T_x_y_point.data])
+            y1_exp_data.extend([datum.y1_mol_frac for datum in T_x_y_point.data])
+            pressure_Pa_data.extend([datum.pressure_Pa for datum in T_x_y_point.data])
+            temperature_K_data.extend([T_x_y_point.temperature_K] * len(T_x_y_point.data))
+            saturation_pressure_Pa_1_data.extend([T_x_y_point.comp_1_saturation_pressure_Pa] * len(T_x_y_point.data))
+            saturation_pressure_Pa_2_data.extend([T_x_y_point.comp_2_saturation_pressure_Pa] * len(T_x_y_point.data))
 
         x1_exp_data_plot        = []
         y1_exp_data_plot        = []
@@ -266,51 +272,47 @@ class BinaryInteractionParametersRegression():
             pressure_Pa = pressure_Pa_data[k]
             x1_exp = x1_exp_data[k] 
             y1_exp = y1_exp_data[k]
+            saturation_pressure_Pa_1 = saturation_pressure_Pa_1_data[k]
+            saturation_pressure_Pa_2 = saturation_pressure_Pa_2_data[k]
 
-            if self.activity_model.upper() == 'WILSON':
-                lambda_12 = self._DIPPR_4p_polynomial_Wilson(coeffs = self.DIPPR_polynomial_coeffs['Lambda_12'],
-                                                                temperature_K = temperature_K)
-                lambda_21 = self._DIPPR_4p_polynomial_Wilson(coeffs = self.DIPPR_polynomial_coeffs['Lambda_21'],
-                                                                temperature_K = temperature_K)
-                
-                gamma_1_calc, gamma_2_calc = self.activity_model_backend.get_activity_coefs(lambda_12 = lambda_12,
-                                                                                            lambda_21 = lambda_21,
-                                                                                            x_val = x1_exp)
+            BIP_values = []
+            for k in range(0, len(self.BIP_polynomial_coeffs)):
+                BIP_val = self.polynomial.evaluate(temperature_K = temperature_K,
+                                                   coeffs = self.BIP_polynomial_coeffs[k])
+                BIP_values.append(BIP_val)
 
-                if self.equation_of_state is not None:
-                    fugacity_coef_1, fugacity_coef_2  = self.eos_backend.get_fugacity_coefs(temperature_K = temperature_K,
-                                                                                                pressure_Pa = pressure_Pa,
-                                                                                                molar_composition = np.array([y1_exp, 1 - y1_exp])) 
-                else: 
-                    fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   # ideal gas assumption if no EoS backend is specified
+            gamma_1_calc, gamma_2_calc = self.activity_model_backend.get_activity_coefs(theta=BIP_values,
+                                                                                        x_val=x1_exp)
 
-                try: 
-                    saturation_pressure_Pa_1 = PropsSI('P','T',temperature_K,'Q',1,CAS_from_any(self.components[0]))
-                    saturation_pressure_Pa_2 = PropsSI('P','T',temperature_K,'Q',1,CAS_from_any(self.components[1]))
-                except:       
-                    continue
+            if self.eos_backend is not None:
+                fugacity_coef_1, fugacity_coef_2  = self.eos_backend.get_fugacity_coefs(temperature_K = temperature_K,
+                                                                                            pressure_Pa = pressure_Pa,
+                                                                                            molar_composition = np.array([y1_exp, 1 - y1_exp])) 
+            else: 
+                fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   # ideal gas assumption if no EoS backend is specified
 
-                y1_calc = x1_exp * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
-                y2_calc = (1 - x1_exp) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
 
-                x1_exp_data_plot.append(x1_exp)
-                y1_exp_data_plot.append(y1_exp)
-                x2_exp_data_plot.append(x1_exp)
-                y2_exp_data_plot.append(y1_exp)
-                y1_calc_data_plot.append(y1_calc)
-                y2_calc_data_plot.append(y2_calc)
-                
-        # Estimating R2 coeffcients  
+            y1_calc = x1_exp * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
+            y2_calc = (1 - x1_exp) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
+
+            x1_exp_data_plot.append(x1_exp)
+            y1_exp_data_plot.append(y1_exp)
+            x2_exp_data_plot.append(x1_exp)
+            y2_exp_data_plot.append(y1_exp)
+            y1_calc_data_plot.append(y1_calc)
+            y2_calc_data_plot.append(y2_calc)
+
+        # Estimating R2 coefficients  
         slope_y1, intercept_y1, r_value_y1, p_value_y1, std_err_y1 = linregress(y1_exp_data_plot, y1_calc_data_plot)
 
         if get_parity_plot is True: 
             plt.figure(figsize=(6,6))
-            plt.scatter(y1_exp_data_plot, y1_calc_data_plot, color='red', label=f'y_{self.components[0]}')
+            plt.scatter(y1_exp_data_plot, y1_calc_data_plot, color='red', label=f'y_{self.VLE_data.components[0]}')
             plt.plot([0, 1], [0, 1], 'k--', label='reference line')
-            plt.xlabel(f'Experimental y_{self.components[0]}')
-            plt.ylabel(f'Calculated y_{self.components[0]}')
-            plt.title(f'Parity Plot for VLE of {self.components[0]} and {self.components[1]} \n'
-                    f'R2 {self.components[0]} =  {r_value_y1**2:.3f}')   
+            plt.xlabel(f'Experimental y_{self.VLE_data.components[0]}')
+            plt.ylabel(f'Calculated y_{self.VLE_data.components[0]}')
+            plt.title(f'Parity Plot for VLE of {self.VLE_data.components[0]} and {self.VLE_data.components[1]} \n'
+                      f'R2 {self.VLE_data.components[0]} =  {r_value_y1**2:.3f}')   
             plt.xlim(0, 1)
             plt.ylim(0, 1)
             plt.legend()
@@ -318,12 +320,12 @@ class BinaryInteractionParametersRegression():
 
         if get_VLE_curve is True: 
             plt.figure(figsize=(6,6))
-            plt.scatter(x1_exp_data_plot, y1_exp_data_plot, color='red', label=f'exp data for {self.components[0]}')
-            plt.plot(x1_exp_data_plot, y1_calc_data_plot, color='blue', label=f'calc data for {self.components[0]}')
+            plt.scatter(x1_exp_data_plot, y1_exp_data_plot, color='red', label=f'exp data for {self.VLE_data.components[0]}')
+            plt.plot(x1_exp_data_plot, y1_calc_data_plot, color='blue', label=f'calc data for {self.VLE_data.components[0]}')
             plt.plot([0, 1], [0, 1], 'k--', label='y=x')
-            plt.xlabel(f'x_{self.components[0]}')
-            plt.ylabel(f'y_{self.components[0]}')
-            plt.title(f'VLE curve for {self.components[0]} and {self.components[1]}')   
+            plt.xlabel(f'x_{self.VLE_data.components[0]}')
+            plt.ylabel(f'y_{self.VLE_data.components[0]}')
+            plt.title(f'VLE curve for {self.VLE_data.components[0]} and {self.VLE_data.components[1]}')   
             plt.xlim(0, 1)
             plt.ylim(0, 1)
             plt.legend()
@@ -332,7 +334,6 @@ class BinaryInteractionParametersRegression():
             pass 
         
         input("Press Enter to continue...")
-
 
         pass
 
