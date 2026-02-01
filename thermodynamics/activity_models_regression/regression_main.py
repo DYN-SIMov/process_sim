@@ -6,7 +6,7 @@ from thermodynamics.core.properties import SoaveRedlichKwongEoSBackend
 from data_handling import VLEData
 from regression_aux import BinaryInteractionParametersRegression
 from activity_models_aux import WilsonActivityModelRegression
-from optimization import PolynomialExponentialDIPPR
+from optimization import PolynomialExponentialDIPPR, PolynomialRegular
 
 
 

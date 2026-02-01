@@ -12,6 +12,20 @@ from pymoo.optimize import minimize as pymoo_minimize
 from joblib import Parallel as JoblibParallel
 from joblib import delayed as joblib_delayed
 
+from typing import Protocol
+
+class Polynomial(Protocol): 
+
+    def evaluate(self,
+                 temperature_K: np.ndarray,
+                 coeffs: np.ndarray) -> np.ndarray:
+        pass
+
+    def get_bounds_scipy(self) -> tuple:
+        pass
+
+    def initial_guess_scipy(self) -> np.ndarray:
+        pass
 
 
 class PolynomialExponentialDIPPR(): 
@@ -45,6 +59,83 @@ class PolynomialExponentialDIPPR():
         return np.exp(ln_lambda)
     
 
+    def get_bounds_scipy(self) -> tuple:
+        """
+        Method to get bounds for the DIPPR polynomial coefficients for scipy optimization
+        """
+
+        bounds = ((-1e4,1e4),   # A
+                  (-1e4,1e4),   # B
+                  (-1e3,1e3),   # C
+                  (-1e1,1e1))   # D
+
+        return bounds
+    
+
+    def get_initial_guess_scipy(self) -> np.ndarray:
+        """
+        Method to get initial guess for the DIPPR polynomial coefficients for scipy optimization
+        """
+
+        initial_guess = np.array([0.5, 0.1, 0.1, 0.1])
+
+        return initial_guess
+
+
+
+
+class PolynomialRegular(): 
+    
+    " Regular polynomial for BIP: "
+    " Lambda_ij = A + B*T + C*T^2 + D*T^3. "
+
+    def __init__(self,
+                 degree: int):
+        self.degree = degree
+        pass
+
+
+    def evaluate(self,
+                 temperature_K: np.ndarray,
+                 coeffs: np.ndarray) -> np.ndarray:
+        """
+        Method to evaluate the regular polynomial
+        """
+
+        T = temperature_K
+        A,B,C,D = coeffs
+
+        lambda_ij = (A + 
+                     B*T + 
+                     C*T**2 + 
+                     D*T**3)
+
+        return lambda_ij
+    
+
+    def get_bounds_scipy(self) -> tuple:
+        """
+        Method to get bounds for the regular polynomial coefficients for scipy optimization
+        """
+
+        bounds = ((-1e4,1e4),   # A
+                  (-1e4,1e4),   # B
+                  (-1e3,1e3),   # C
+                  (-1e2,1e2))   # D
+
+        return bounds
+    
+
+    def get_initial_guess_scipy(self) -> np.ndarray:
+        """
+        Method to get initial guess for the regular polynomial coefficients for scipy optimization
+        """
+
+        initial_guess = np.array([0.5, 0.1, 0.1, 0.1])
+
+        return initial_guess
+    
+
 
 class PolynomialExponentialElementwiseEstimator():
 
@@ -65,6 +156,7 @@ class PolynomialExponentialElementwiseEstimator():
         " Objective function for DIPPR polynomial regression of Wilson BIP parameters. "
         
         error_data = []
+        k_mid = len(self.temperature_K_data)//2
         for k in range(len(self.temperature_K_data)):
             BIP_ij_exp  = self.BIP_elementwise_results[k, current_BIP_count]
             BIP_ij_calc = self.polynomial.evaluate(temperature_K = self.temperature_K_data[k],
@@ -84,10 +176,10 @@ class PolynomialExponentialElementwiseEstimator():
         for current_BIP_count in range(0,total_number_of_BIP):
 
             current_esitmation_run = scipy_minimize(fun = self._objective_function,
-                                        x0 = np.repeat(0.0, self.polynomial.degree),
+                                        x0 = self.polynomial.get_initial_guess_scipy(),
                                         method = 'Nelder-Mead',
                                         args = (current_BIP_count),
-                                        bounds = ((-1e4,1e4),(-1e4,1e4),(-1e3,1e3),(-1e0,1e0)))
+                                        bounds = self.polynomial.get_bounds_scipy())
 
             if current_esitmation_run.success:
                 BIP_coeffs_estimation_results.append(current_esitmation_run)

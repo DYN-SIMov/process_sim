@@ -102,9 +102,10 @@ class WilsonActivityModelRegression(WilsonActivityModel):
                                                                  x_val = x_exp_val)
 
             if eos_backed is not None:
-                fugacity_coef_1, fugacity_coef_2  = eos_backed.get_fugacity_coefs(temperature_K = temperature_K,
-                                                                  pressure_Pa = pressure_Pa,
-                                                                  molar_composition = np.array([y_exp_val, 1 - y_exp_val])) 
+                fugacity_coef_1, fugacity_coef_2  = eos_backed.get_fugacity_coefs(
+                    temperature_K = temperature_K,
+                    pressure_Pa = pressure_Pa,
+                    molar_composition = np.array([y_exp_val, 1 - y_exp_val])) 
             else: 
                 fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   # ideal gas assumption if no EoS backend is specified
 
@@ -201,12 +202,12 @@ class WilsonActivityModelRegression(WilsonActivityModel):
                                                  estimation_results: list) -> None:
         
         msg = (f"\n DIPPR 4th order polynomial regression of Wilson BIP parameters converged successfully. \n"
-               f" Fitted coefficients for Lambda_12: A = {estimation_results[0].x[0]:.4f}, B = {estimation_results[0].x[1]:.4f}, "
-               f"C = {estimation_results[0].x[2]:.4f}, D = {estimation_results[0].x[3]:.4f}."
-               f" Residual = {estimation_results[0].fun:.4e}. "
-               f"\n Fitted coefficients for Lambda_21: A = {estimation_results[1].x[0]:.4f}, B = {estimation_results[1].x[1]:.4f}, "
-               f"C = {estimation_results[1].x[2]:.4f}, D = {estimation_results[1].x[3]:.4f}. "
-               f" Residual = {estimation_results[1].fun:.4e}. ")
+               f" Fitted coefficients for Lambda_12: A = {estimation_results[0].x[0]:.4f}, "
+               f"B = {estimation_results[0].x[1]:.4f}, C = {estimation_results[0].x[2]:.4f}, "
+               f"D = {estimation_results[0].x[3]:.4f}. Residual = {estimation_results[0].fun:.4e}. "
+               f"\n Fitted coefficients for Lambda_21: A = {estimation_results[1].x[0]:.4f}, " 
+               f"B = {estimation_results[1].x[1]:.4f}, C = {estimation_results[1].x[2]:.4f}, " 
+               f"D = {estimation_results[1].x[3]:.4f}. Residual = {estimation_results[1].fun:.4e}. ")
         print(colored(msg, 'green'))
 
 

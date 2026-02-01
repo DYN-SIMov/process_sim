@@ -32,6 +32,7 @@ class DataPoint():
         self.comp2 = comp2
 
 
+
 class TxyPoint(): 
     
     def __init__(self,
@@ -42,6 +43,7 @@ class TxyPoint():
         self.comp_2_saturation_pressure_Pa: float = None
 
     pass
+
 
 
 class RawExperimentalData(list[DataPoint]): 
