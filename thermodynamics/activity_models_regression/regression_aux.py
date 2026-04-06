@@ -21,6 +21,7 @@ from thermodynamics.core.properties import PureComponentDataBackend
 
 from activity_models_aux import ActivityModelRegressionInterface
 from optimization import PolynomialExponentialDIPPR, PolynomialElementwiseEstimator, PolynomialInterface
+from optimization import PolynominalFormInterface, AbsoluteForm, NormalizedForm
 from optimization import PymooCallbackHandler, Callback
 # from optimization import DIPPR_polynomial_regression_GA
 from data_handling import VLEData
@@ -34,11 +35,12 @@ class BinaryInteractionParametersRegression():
                  activity_model_regression: ActivityModelRegressionInterface = None,
                  equation_of_state: EquationOfStateInterface = None,
                  VLE_data: VLEData = None,
-                 polynomial: PolynomialExponentialDIPPR = None) -> None: 
+                 polynomial: PolynomialExponentialDIPPR = None,
+                 polynomial_form: PolynominalFormInterface = AbsoluteForm) -> None: 
 
         self.VLE_data = VLE_data
-        self.polynomial = polynomial
-        
+        self.polynomial = polynomial_form(polynomial) if polynomial is not None else None
+
         pure_component_data_backend = PureComponentDataBackend(components=self.VLE_data.components)
         self.eos_backend = equation_of_state(components=self.VLE_data.components,
                                              pure_component_data_backend=pure_component_data_backend)
@@ -109,7 +111,11 @@ class BinaryInteractionParametersRegression():
         )
 
         BIP_coeffs = [estimation_results[k].x for k in range(len(estimation_results))]
-        self.BIP_polynomial_coeffs = BIP_coeffs
+        self.BIP_polynomial_coeffs = [
+            self.polynomial.get_absolute_coeffs(
+                coeffs=BIP_coeffs[k]
+            ) for k in range(len(BIP_coeffs))
+        ]
         
         pass
 
@@ -131,7 +137,8 @@ class BinaryInteractionParametersRegression():
             memetic_callback = PymooCallbackHandler(
                 n_gens_skipped=20, 
                 verbose=verbose,
-                local_optimizer_maxiter=int(1e4)
+                local_optimizer_maxiter=int(1e4),
+                n_candidates_selected=4, 
             )
         else: 
             memetic_callback = Callback()
@@ -147,7 +154,7 @@ class BinaryInteractionParametersRegression():
             eos_backend=self.eos_backend
         )
 
-        algorithm = GA(pop_size=500,
+        algorithm = GA(pop_size=1000,
                        eliminate_duplicates=True)
         
         results = pymoo_minimize(
@@ -166,7 +173,11 @@ class BinaryInteractionParametersRegression():
 
         BIP_coeffs = results.X.reshape((activity_model.number_of_BIP_parameters, 
                                         self.polynomial.degree))
-        self.BIP_polynomial_coeffs = BIP_coeffs
+        self.BIP_polynomial_coeffs = [
+            self.polynomial.get_absolute_coeffs(
+                coeffs=BIP_coeffs[k]
+            ) for k in range(len(BIP_coeffs))
+        ]
 
 
         pass

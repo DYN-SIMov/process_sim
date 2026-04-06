@@ -22,6 +22,7 @@ class LocalOptimizationMethod(Enum):
     POWELL = "Powell"
     CG = "CG"
     BFGS = "BFGS"
+    SLSQP = "SLSQP"
 
 
 class ObjectiveNumericalError(RuntimeError):
@@ -34,7 +35,8 @@ class LocalOptimizationError(RuntimeError):
 
 
 class PolynomialInterface(Protocol): 
-
+    """ Protocol for polynomial forms to be used in the regression of BIP parameters. """
+    
     def evaluate(self,
                  temperature_K: np.ndarray,
                  coeffs: np.ndarray) -> np.ndarray:
@@ -45,6 +47,131 @@ class PolynomialInterface(Protocol):
 
     def initial_guess_scipy(self) -> np.ndarray:
         pass
+
+
+
+class PolynominalFormInterface(Protocol):
+    """ Protocol for the form of the polynomial to be used in the regression of BIP parameters."""
+
+    def __init__(self,
+                 polynomial: PolynomialInterface):
+        pass
+
+    def evaluate(self,
+                 temperature_K: np.ndarray,
+                 coeffs: np.ndarray) -> np.ndarray:
+        pass
+
+    def get_bounds_scipy(self) -> tuple:
+        pass
+
+    def get_initial_guess_scipy(self) -> np.ndarray:
+        pass
+
+    def get_absolute_coeffs(self, coeffs: np.ndarray) -> np.ndarray:
+        pass
+
+
+class AbsoluteForm(PolynominalFormInterface):
+    """ Wrapper for polynomial object - absolute form of polynomial coefficients: """
+
+    def __init__(self,
+                 polynomial: PolynomialInterface):
+        self.polynomial = polynomial
+        self.degree = polynomial.degree
+        self.initial_guess = self.polynomial.get_initial_guess_scipy()
+        self.scipy_bounds = self.polynomial.get_bounds_scipy()
+        self._xl_absolute = [bound[0] for bound in self.scipy_bounds]
+        self._xu_absolute = [bound[1] for bound in self.scipy_bounds]
+        
+        pass
+
+
+    def evaluate(self,
+                 temperature_K: np.ndarray,
+                 coeffs: np.ndarray) -> np.ndarray:
+        return self.polynomial.evaluate(temperature_K=temperature_K, coeffs=coeffs)
+
+
+    def get_bounds_scipy(self) -> tuple:
+        return self.scipy_bounds
+
+
+    def get_initial_guess_scipy(self) -> np.ndarray:
+        return self.initial_guess
+    
+    def get_absolute_coeffs(self, coeffs: np.ndarray) -> np.ndarray:
+        return coeffs
+
+    
+
+
+class NormalizedForm(PolynominalFormInterface):
+    """Wraper for polynomial object - normalized form of polynomial coefficients:"""
+
+    def __init__(self,
+                 polynomial: PolynomialInterface):
+        self.polynomial = polynomial
+        self.degree = polynomial.degree
+
+        scipy_bounds_absolute = self.polynomial.get_bounds_scipy()
+        self._xl_absolute = [bound[0] for bound in scipy_bounds_absolute]
+        self._xu_absolute = [bound[1] for bound in scipy_bounds_absolute]
+
+        self.initial_guess = self._normalize_coeffs(self.polynomial.get_initial_guess_scipy())
+        
+        bounds = self._normalize_coeffs(np.array(self.polynomial.get_bounds_scipy()))
+        self.scipy_bounds = tuple(
+            (bounds[k][0], bounds[k][1]) for k in range(len(bounds))
+        )
+        
+        pass 
+
+
+    def evaluate(self,
+                 temperature_K: np.ndarray,
+                 coeffs: np.ndarray) -> np.ndarray:
+        
+        denormalized_coeffs = self._denormalize_coeffs(coeffs)
+        return self.polynomial.evaluate(temperature_K=temperature_K, coeffs=denormalized_coeffs) 
+
+
+    def get_bounds_scipy(self) -> tuple:
+        return self.scipy_bounds
+    
+
+    def get_initial_guess_scipy(self) -> np.ndarray:
+        return self.initial_guess
+    
+
+    def get_absolute_coeffs(self, coeffs):
+        return self._denormalize_coeffs(coeffs)
+
+
+    def _normalize_coeffs(self, coeffs: np.ndarray) -> np.ndarray:
+        
+        normalized_coeffs = []
+        for k in range(len(coeffs)):
+            coeff_k = coeffs[k]
+            xl_k = self._xl_absolute[k]
+            xu_k = self._xu_absolute[k]
+            normalized_coeff_k = (coeff_k - xl_k) / (xu_k - xl_k)
+            normalized_coeffs.append(normalized_coeff_k)
+
+        return np.array(normalized_coeffs)
+
+
+    def _denormalize_coeffs(self, coeffs: np.ndarray) -> np.ndarray:
+        denormalized_coeffs = []
+        for k in range(len(coeffs)):
+            coeff_k = coeffs[k]
+            xl_k = self._xl_absolute[k]
+            xu_k = self._xu_absolute[k]
+            denormalized_coeff_k = coeff_k * (xu_k - xl_k) + xl_k
+            denormalized_coeffs.append(denormalized_coeff_k)
+
+        return np.array(denormalized_coeffs)
+
 
 
 class PolynomialExponentialDIPPR(): 
@@ -138,7 +265,7 @@ class PolynomialRegular():
         """
 
         bounds = ((-1e4,1e4),   # A
-                  (-1e4,1e4),   # B
+                  (-1e3,1e3),   # B
                   (-1e3,1e3),   # C
                   (-1e2,1e2))   # D
 
@@ -196,7 +323,7 @@ class PolynomialElementwiseEstimator():
 
             current_esitmation_run = scipy_minimize(fun = self._objective_function,
                                         x0 = self.polynomial.get_initial_guess_scipy(),
-                                        method = 'Nelder-Mead',
+                                        method = LocalOptimizationMethod.NELDER_MEAD.value,
                                         args = (current_BIP_count),
                                         bounds = self.polynomial.get_bounds_scipy())
 
