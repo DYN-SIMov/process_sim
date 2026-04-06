@@ -20,10 +20,12 @@ from thermodynamics.core.properties import EquationOfStateInterface
 from thermodynamics.core.properties import PureComponentDataBackend
 
 from activity_models_aux import ActivityModelRegressionInterface
-from optimization import PolynomialExponentialDIPPR, PolynomialExponentialElementwiseEstimator
-from optimization import DIPPR_polynomial_regression_GA
+from optimization import PolynomialExponentialDIPPR, PolynomialElementwiseEstimator, PolynomialInterface
+from optimization import PymooCallbackHandler, Callback
+# from optimization import DIPPR_polynomial_regression_GA
 from data_handling import VLEData
 
+from optimization import PymooPolynomialEstimator
 
 
 class BinaryInteractionParametersRegression(): 
@@ -96,18 +98,81 @@ class BinaryInteractionParametersRegression():
         temperature_K_data = [T_x_y_point.temperature_K for T_x_y_point in self.VLE_data.T_x_y_points]
         BIP_elementwise_results = self.elementwise_opt_results
 
-        elementwise_estimator = PolynomialExponentialElementwiseEstimator(temperature_K_data = temperature_K_data,
-                                                                          BIP_elementwise_results = BIP_elementwise_results,
-                                                                          polynomial = self.polynomial)
+        elementwise_estimator = PolynomialElementwiseEstimator(
+            temperature_K_data = temperature_K_data,
+            BIP_elementwise_results = BIP_elementwise_results,
+            polynomial = self.polynomial
+        )
         estimation_results = elementwise_estimator.estimate_coefficients()
-        self.activity_model_backend.get_polynomial_coeffs_estimation_message(components=self.VLE_data.components,
-                                                                             estimation_results=estimation_results)
+        self.activity_model_backend.get_polynomial_coeffs_estimation_message(
+            estimation_results=estimation_results
+        )
 
         BIP_coeffs = [estimation_results[k].x for k in range(len(estimation_results))]
         self.BIP_polynomial_coeffs = BIP_coeffs
         
         pass
 
+
+
+    def estimate_polynomial_from_VLE_data(self,
+                                          n_jobs:int = 1,
+                                          is_memetic:bool = True,
+                                          verbose:bool = False) -> None: 
+
+        " Method for regressing parameters directly from VLE data "
+        activity_model = self.activity_model_backend
+
+        scipy_bounds = self.polynomial.get_bounds_scipy()
+        lower_bounds = [bound[0] for bound in scipy_bounds]*activity_model.number_of_BIP_parameters
+        upper_bounds = [bound[1] for bound in scipy_bounds]*activity_model.number_of_BIP_parameters
+
+        if is_memetic: 
+            memetic_callback = PymooCallbackHandler(
+                n_gens_skipped=20, 
+                verbose=verbose,
+                local_optimizer_maxiter=int(1e4)
+            )
+        else: 
+            memetic_callback = Callback()
+
+        problem = PymooPolynomialEstimator(
+            number_of_parameters=len(lower_bounds),
+            n_jobs=n_jobs,
+            objective_function=activity_model.objective_function_from_VLE,
+            lower_bounds=lower_bounds,
+            upper_bounds=upper_bounds,
+            VLE_data=self.VLE_data,
+            polynomial=self.polynomial,
+            eos_backend=self.eos_backend
+        )
+
+        algorithm = GA(pop_size=500,
+                       eliminate_duplicates=True)
+        
+        results = pymoo_minimize(
+            problem=problem,
+            algorithm=algorithm,
+            termination=("n_gen", 500),
+            seed=1,
+            verbose=verbose,
+            callback=memetic_callback
+        )
+
+        activity_model.get_message_estimation_from_VLE(
+            coeffs = results.X,
+            total_residual = results.F[0]
+        )
+
+        BIP_coeffs = results.X.reshape((activity_model.number_of_BIP_parameters, 
+                                        self.polynomial.degree))
+        self.BIP_polynomial_coeffs = BIP_coeffs
+
+
+        pass
+
+
+    """
     
     def _objective_function_for_DIPPR_4p_polynomial_from_VLE(self,
                                                              x:np.ndarray) -> float: 
@@ -178,7 +243,9 @@ class BinaryInteractionParametersRegression():
      
         return sum(objective_function_values) 
 
+    """
 
+    """
     def estimate_DIPPR_polynomial_from_VLE_data(self): 
 
 
@@ -235,6 +302,8 @@ class BinaryInteractionParametersRegression():
 
 
         pass
+        
+    """
 
 
 

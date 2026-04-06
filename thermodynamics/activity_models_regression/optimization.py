@@ -8,13 +8,32 @@ from scipy.optimize import minimize as scipy_minimize
 from pymoo.core.problem import Problem
 from pymoo.core.population import Population
 from pymoo.algorithms.soo.nonconvex.ga import GA
+from pymoo.core.callback import Callback
 from pymoo.optimize import minimize as pymoo_minimize
 from joblib import Parallel as JoblibParallel
 from joblib import delayed as joblib_delayed
 
 from typing import Protocol
+from enum import Enum
 
-class Polynomial(Protocol): 
+
+class LocalOptimizationMethod(Enum):
+    NELDER_MEAD = "Nelder-Mead"
+    POWELL = "Powell"
+    CG = "CG"
+    BFGS = "BFGS"
+
+
+class ObjectiveNumericalError(RuntimeError):
+    """Raised when the objective hits invalid/overflow/divide-by-zero."""
+    pass
+
+class LocalOptimizationError(RuntimeError):
+    """Raised when the local optimization fails to converge."""
+    pass
+
+
+class PolynomialInterface(Protocol): 
 
     def evaluate(self,
                  temperature_K: np.ndarray,
@@ -137,12 +156,12 @@ class PolynomialRegular():
     
 
 
-class PolynomialExponentialElementwiseEstimator():
+class PolynomialElementwiseEstimator():
 
     def __init__(self,
                  temperature_K_data: np.ndarray,
                  BIP_elementwise_results: np.ndarray,
-                 polynomial:PolynomialExponentialDIPPR):
+                 polynomial:PolynomialInterface):
         self.temperature_K_data = temperature_K_data
         self.BIP_elementwise_results = BIP_elementwise_results
         self.polynomial = polynomial
@@ -193,18 +212,23 @@ class PolynomialExponentialElementwiseEstimator():
 
 
 
-
-class DIPPR_polynomial_regression_GA(Problem):
+class PymooPolynomialEstimator(Problem):
     def __init__(self, 
                  number_of_parameters,
                  lower_bounds,
                  upper_bounds, 
                  objective_function,
+                 VLE_data,
+                 polynomial,
+                 eos_backend,
                  n_jobs = 1,
                  backend = 'loky', 
                  **kwargs):
         
         self.objective_function = objective_function
+        self.VLE_data = VLE_data
+        self.polynomial = polynomial
+        self.eos_backend = eos_backend
         self.n_jobs = n_jobs
         self.backend = backend
 
@@ -218,20 +242,204 @@ class DIPPR_polynomial_regression_GA(Problem):
         )
 
 
-    def _evaluate_safely(self,coeffs): 
+    def _evaluate_with_warnings(self, coeffs:np.ndarray): 
+
+        """
+        Runs objective function catching numpy warnins. 
+
+        This is needed because sometimes during optimization some coeffs values
+        may lead to invalid calculations (e.g. infiinty) inside the activity model
+        objective function.
+        """
 
         try: 
-            objective_function_val = self.objective_function(coeffs)
-        except: 
-            objective_function_val = 1e20
+            with np.errstate(invalid="raise", divide="raise", over="raise"):
 
-        return objective_function_val
+                objective_function_val = self.objective_function(coeffs=coeffs,
+                                                                 VLE_data=self.VLE_data,
+                                                                 polynomial=self.polynomial,
+                                                                 eos_backend=self.eos_backend)
+                return objective_function_val
+            
+        except FloatingPointError as e: 
+            return 1e20
 
 
     def _evaluate(self, X, out, *args, **kwargs):
 
         F = JoblibParallel(n_jobs=self.n_jobs, backend=self.backend)(
-            joblib_delayed(self._evaluate_safely)(x) for x in X)
+            joblib_delayed(self._evaluate_with_warnings)(x) for x in X)
 
         out["F"] = np.asarray(F, dtype=float).reshape(-1, 1)
 
+
+
+
+
+
+class PymooCallbackHandler(Callback):
+    def __init__(self,
+                 n_gens_skipped: int = 10,
+                 n_candidates_selected: int = 3,
+                 local_optimizer_method: LocalOptimizationMethod = LocalOptimizationMethod.NELDER_MEAD,
+                 local_optimizer_maxiter: int = 100,
+                 max_workers: int = 4,
+                 verbose: bool = False):
+        
+        super().__init__()
+        self.n_gens_skipped = n_gens_skipped
+        self.n_candidates_selected = n_candidates_selected
+        self.local_optimizer_method = local_optimizer_method
+        self.local_optimizer_maxiter = local_optimizer_maxiter
+        self.max_workers = max_workers
+        self.verbose = verbose
+
+        pass
+
+
+    def notify(self, algorithm) -> None:
+
+        """
+        Callback function to be implemented for memetic optimization in pymoo.
+        """
+        current_generation = algorithm.n_iter 
+        if current_generation % self.n_gens_skipped != 0:
+            return 
+
+        memetic_results = self._run_memetic_optimization(algorithm=algorithm)
+        self._update_candidates_in_population(algorithm=algorithm, memetic_results=memetic_results)
+
+        pass
+
+
+    def _run_memetic_optimization(self, algorithm):
+
+        " Method to run local optimization for the best candidates in the population. "
+
+        
+        fvals_data = algorithm.pop.get("F").flatten()
+        best_fvals_indices = np.argsort(fvals_data)[:self.n_candidates_selected]
+        best_candidates = algorithm.pop[best_fvals_indices]
+        theta_initial_data = best_candidates.get("X")
+        fval_initial_data = best_candidates.get("F")
+
+        n_jobs = min(
+            self.max_workers, 
+            self.n_candidates_selected,
+            algorithm.problem.n_jobs
+        )
+
+        opt_results = JoblibParallel(n_jobs=n_jobs, backend='loky')(
+            joblib_delayed(self._run_local_optimization)(
+                algorithm=algorithm,
+                theta_initial=theta_initial_data[k],
+                local_optimizer_method=self.local_optimizer_method,
+                local_optimizer_maxiter=self.local_optimizer_maxiter,
+            ) for k in range(len(best_candidates))
+        )
+
+        return {
+            'best_candidates_indices': best_fvals_indices,
+            'best_candidates_initial_theta': theta_initial_data,
+            'best_candidates_initial_fval': fval_initial_data,
+            'opt_results': opt_results
+        }
+
+
+    def _run_local_optimization(self, 
+                                algorithm,
+                                theta_initial: np.ndarray, 
+                                local_optimizer_method: LocalOptimizationMethod, 
+                                local_optimizer_maxiter: int) -> dict:
+
+        " Method to run local optimization for a single candidate. "
+
+        xl = algorithm.problem.xl
+        xu = algorithm.problem.xu
+        bounds = [(xl[k], xu[k]) for k in range(len(xl))]
+
+        try: 
+            local_opt_result = scipy_minimize(
+                fun=algorithm.problem._evaluate_with_warnings,
+                x0=theta_initial,
+                method=local_optimizer_method.value,
+                bounds=bounds,
+                options={'maxiter': local_optimizer_maxiter}
+            )
+            if not self._local_optimization_converged(local_opt_result):
+                raise LocalOptimizationError()
+            
+            return {
+                'theta_opt': local_opt_result.x,
+                'fval_opt': local_opt_result.fun
+            }
+
+        except Exception as e:
+            print(f" Local optimization failed for candidate with initial theta {theta_initial}. "
+                  f"Error: {str(e)}")
+            return {
+                'theta_opt': None,
+                'fval_opt': None
+            }
+    
+
+    def _update_candidates_in_population(self, 
+                                         algorithm,
+                                         memetic_results: dict) -> None:
+
+        " Method to update the candidate in the population with the optimized values. "
+
+        for idx, candidate_idx in enumerate(memetic_results['best_candidates_indices']):
+            theta_opt = memetic_results['opt_results'][idx]['theta_opt']
+            fval_opt = memetic_results['opt_results'][idx]['fval_opt']
+            theta_initial = memetic_results['best_candidates_initial_theta'][idx]
+            fval_initial = memetic_results['best_candidates_initial_fval'][idx][0]
+
+            if theta_opt is None or fval_opt is None:
+                continue
+
+            algorithm.pop[candidate_idx].set("X", theta_opt)
+            algorithm.pop[candidate_idx].set("F", np.asarray(fval_opt).reshape(1,))
+
+            if self.verbose:
+                print(
+                    self._get_memetic_optimization_message(
+                        theta_initial=theta_initial,
+                        fval_initial=fval_initial,
+                        theta_opt=theta_opt,
+                        fval_opt=fval_opt
+                    )
+                )
+            
+
+    @staticmethod
+    def _get_memetic_optimization_message(theta_initial: np.ndarray,
+                                          fval_initial: float,
+                                          theta_opt: np.ndarray,
+                                          fval_opt: float) -> str: 
+
+        " Method to get the message for memetic optimization results. "
+
+        msg = (
+            f"Memetic optimization successful: \n"
+            f" Initial fval: {fval_initial:.3f}, initial coeffs =     \
+                { [round(x, 2) for x in theta_initial.tolist()] }, \n"
+            f" Optimized fval: {fval_opt:.3f}, optimized coeffs = \
+                { [round(x, 2) for x in theta_opt.tolist()] } \n"
+        )
+
+        return msg 
+
+
+    @staticmethod
+    def _local_optimization_converged(local_opt_result) -> bool: 
+
+        condition = (
+            local_opt_result.success or
+            local_opt_result.message in [
+                    "Optimization terminated successfully.", 
+                    "Maximum number of iterations has been exceeded."
+            ]
+        ) 
+        return condition
+                

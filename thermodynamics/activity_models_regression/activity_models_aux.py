@@ -37,6 +37,8 @@ class ActivityModelRegressionInterface(Protocol):
 
 class WilsonActivityModelRegression(WilsonActivityModel):
     
+    number_of_BIP_parameters:int = 2
+
     def __init__(self,
                  components,
                  pure_component_data_backend):
@@ -76,6 +78,7 @@ class WilsonActivityModelRegression(WilsonActivityModel):
 
         return gamma_1, gamma_2
     
+
 
     def objective_function_elementwise(self, 
                                        theta: np.ndarray,
@@ -198,8 +201,7 @@ class WilsonActivityModelRegression(WilsonActivityModel):
 
     
     @staticmethod
-    def get_polynomial_coeffs_estimation_message(components: list[str],
-                                                 estimation_results: list) -> None:
+    def get_polynomial_coeffs_estimation_message(estimation_results: list) -> None:
         
         msg = (f"\n DIPPR 4th order polynomial regression of Wilson BIP parameters converged successfully. \n"
                f" Fitted coefficients for Lambda_12: A = {estimation_results[0].x[0]:.4f}, "
@@ -212,3 +214,53 @@ class WilsonActivityModelRegression(WilsonActivityModel):
 
 
         pass
+
+
+    @staticmethod
+    def get_message_estimation_from_VLE(coeffs: list,
+                                        total_residual: float) -> None:
+        
+        msg = (f"\n DIPPR 4th order polynomial regression of Wilson BIP parameters converged successfully. \n"
+               f" Fitted coefficients for Lambda_12: A = {coeffs[0]:.4f}, "
+               f"B = {coeffs[1]:.4f}, C = {coeffs[2]:.4f}, D = {coeffs[3]:.4f}. "
+               f"\n Fitted coefficients for Lambda_21: A = {coeffs[4]:.4f}, " 
+               f"B = {coeffs[5]:.4f}, C = {coeffs[6]:.4f}, D = {coeffs[7]:.4f}. "
+               f"\n Total residual = {total_residual:.4e}. ")
+        print(colored(msg, 'green'))
+
+
+        pass
+
+
+    def objective_function_from_VLE(self,
+                                    coeffs: np.ndarray,
+                                    polynomial,
+                                    VLE_data,
+                                    eos_backend) -> float:
+
+        param_coeffs = coeffs.reshape((self.number_of_BIP_parameters, polynomial.degree))
+        
+        error_data = []
+        for T_x_y_point in VLE_data.T_x_y_points:
+            theta = []
+
+            BIP_12_calc = polynomial.evaluate(temperature_K = T_x_y_point.temperature_K,
+                                            coeffs = param_coeffs[0])
+            BIP_21_calc = polynomial.evaluate(temperature_K = T_x_y_point.temperature_K,
+                                            coeffs = param_coeffs[1])
+            theta = np.array([BIP_12_calc, BIP_21_calc])
+
+            error_val = self.objective_function_elementwise(
+                theta = theta,
+                regression_params = {
+                    'x1': np.array([point.x1_mol_frac for point in T_x_y_point.data]),
+                    'y1': np.array([point.y1_mol_frac for point in T_x_y_point.data]),
+                    'pressure_Pa': np.array([point.pressure_Pa for point in T_x_y_point.data]),
+                    'temperature_K': T_x_y_point.temperature_K,
+                    'saturation_pressure_Pa_1': T_x_y_point.comp_1_saturation_pressure_Pa,
+                    'saturation_pressure_Pa_2': T_x_y_point.comp_2_saturation_pressure_Pa,
+                    'eos_backend': eos_backend
+                })
+            error_data.append(error_val)
+
+        return sum(error_data)
