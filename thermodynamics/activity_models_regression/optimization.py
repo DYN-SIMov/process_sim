@@ -356,7 +356,6 @@ class PymooPolynomialEstimator(Problem):
                  objective_function,
                  VLE_data,
                  polynomial,
-                 eos_backend,
                  n_jobs = 1,
                  backend = 'loky', 
                  **kwargs):
@@ -364,7 +363,6 @@ class PymooPolynomialEstimator(Problem):
         self.objective_function = objective_function
         self.VLE_data = VLE_data
         self.polynomial = polynomial
-        self.eos_backend = eos_backend
         self.n_jobs = n_jobs
         self.backend = backend
 
@@ -393,8 +391,7 @@ class PymooPolynomialEstimator(Problem):
 
                 objective_function_val = self.objective_function(coeffs=coeffs,
                                                                  VLE_data=self.VLE_data,
-                                                                 polynomial=self.polynomial,
-                                                                 eos_backend=self.eos_backend)
+                                                                 polynomial=self.polynomial)
                 return objective_function_val
             
         except FloatingPointError as e: 

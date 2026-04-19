@@ -368,3 +368,28 @@ class WilsonActivityModel():
     
 
 
+class NRTLActivityModel():
+    name = 'NRTL'
+    components: tuple[str, ...]
+    pure_component_data_backend: PureComponentDataBackend
+    
+    def __init__(self,
+                 components: tuple[str, ...],
+                 pure_component_data_backend: PureComponentDataBackend):
+        self.components = components
+        self.pure_component_data_backend = pure_component_data_backend
+        self._cache = {}
+
+    def get_effective_activity_coefs(self,
+                                   temperature_K: float,
+                                   pressure_Pa: float,
+                                   molar_composition: np.ndarray) -> np.ndarray:
+        " This method calculates effective activity coefficients using NRTL model. "
+
+        # Placeholder implementation
+        return np.ones_like(molar_composition)
+    
+    
+    
+
+

@@ -7,7 +7,7 @@ import os
 
 from termcolor import colored
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from thermodynamics.core.properties import WilsonActivityModel
+from thermodynamics.core.properties import WilsonActivityModel, NRTLActivityModel
 
 
 class ActivityModelRegressionInterface(Protocol):
@@ -77,58 +77,6 @@ class WilsonActivityModelRegression(WilsonActivityModel):
         gamma_2 = np.exp(ln_gamma_2)
 
         return gamma_1, gamma_2
-    
-
-
-    def objective_function_elementwise(self, 
-                                       theta: np.ndarray,
-                                       regression_params) -> float:
-
-        """
-        Objective function for elementwise estimation of Wilson BIP parameters 
-        """
-
-        x_exp_data = regression_params['x1']
-        y_exp_data = regression_params['y1']
-        pressure_Pa_data = regression_params['pressure_Pa']
-        temperature_K = regression_params['temperature_K']
-        saturation_pressure_Pa_1 = regression_params['saturation_pressure_Pa_1']
-        saturation_pressure_Pa_2 = regression_params['saturation_pressure_Pa_2']
-        eos_backed = regression_params['eos_backend']
-
-        error_data = []
-        for k in range(len(x_exp_data)):
-            x_exp_val = x_exp_data[k]
-            y_exp_val = y_exp_data[k]
-            pressure_Pa = pressure_Pa_data[k]
-            gamma_1_calc, gamma_2_calc = self.get_activity_coefs(theta=theta,
-                                                                 x_val = x_exp_val)
-
-            if eos_backed is not None:
-                fugacity_coef_1, fugacity_coef_2  = eos_backed.get_fugacity_coefs(
-                    temperature_K = temperature_K,
-                    pressure_Pa = pressure_Pa,
-                    molar_composition = np.array([y_exp_val, 1 - y_exp_val])) 
-            else: 
-                fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   # ideal gas assumption if no EoS backend is specified
-
-
-            # based on the modified Raoult's law: y_i * fi_i * P_total= x_i * gamma_i * P_sat_i 
-            y_calc_val_1 = x_exp_val * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
-            y_calc_val_2 = (1 - x_exp_val) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
-            
-            pressure_total_Pa_calc = ((x_exp_val * gamma_1_calc * saturation_pressure_Pa_1) / (y_calc_val_1 * fugacity_coef_1) + 
-                                        ((1 - x_exp_val) * gamma_2_calc * saturation_pressure_Pa_2) / (y_calc_val_2 * fugacity_coef_2))/2
-
-            y_exp_val_1  = y_exp_val
-            y_exp_val_2  = 1 - y_exp_val
-
-            error = ((y_exp_val_1 - y_calc_val_1)**2 + 
-                     (y_exp_val_2 - y_calc_val_2)**2 + 
-                     ((pressure_Pa - pressure_total_Pa_calc)/pressure_Pa)**2)
-            error_data.append(error)
-
-        return sum(error_data)
     
 
     @staticmethod
@@ -230,37 +178,57 @@ class WilsonActivityModelRegression(WilsonActivityModel):
 
 
         pass
+    
 
 
-    def objective_function_from_VLE(self,
-                                    coeffs: np.ndarray,
-                                    polynomial,
-                                    VLE_data,
-                                    eos_backend) -> float:
 
-        param_coeffs = coeffs.reshape((self.number_of_BIP_parameters, polynomial.degree))
+class NRTLActivityModelRegression(NRTLActivityModel): 
+
+    alpha_is_fixed:bool = True
+    alpha:float = 0.3 
+
+    number_of_BIP_parameters:int = 2 if alpha_is_fixed else 4
+
+    def __init__(self,
+                 components,
+                 pure_component_data_backend):
+        super().__init__(components=components,
+                         pure_component_data_backend=pure_component_data_backend)
+        pass
+
+
+    @staticmethod
+    def get_activity_coefs(theta: np.ndarray,
+                           x_val: np.ndarray) -> np.ndarray:
+
+        """
+        Method to get activity coeffcients (gamma_1 and gamma_2) based on NRTL equation
+        """
+
+        tau_12 = theta[0]
+        tau_21 = theta[1]
+
+        if NRTLActivityModelRegression.alpha_is_fixed:
+            alpha_12 = NRTLActivityModelRegression.alpha
+            alpha_21 = NRTLActivityModelRegression.alpha
+        else:
+            alpha_12 = theta[2]
+            alpha_21 = theta[3]
+
+        x_1 = x_val
+        x_2 = 1 - x_val
+
+        G_12 = np.exp(-alpha_12 * tau_12)
+        G_21 = np.exp(-alpha_21 * tau_21)
+
+        ln_gamma_1 = x_2**2 * (tau_21 * (G_21 / (x_1 + x_2 * G_21))**2 + 
+                               tau_12 * G_12 / (x_2 + x_1 * G_12)**2)
+        ln_gamma_2 = x_1**2 * (tau_12 * (G_12 / (x_2 + x_1 * G_12))**2 + 
+                               tau_21 * G_21 / (x_1 + x_2 * G_21)**2)
         
-        error_data = []
-        for T_x_y_point in VLE_data.T_x_y_points:
-            theta = []
+        gamma_1 = np.exp(ln_gamma_1)
+        gamma_2 = np.exp(ln_gamma_2)
 
-            BIP_12_calc = polynomial.evaluate(temperature_K = T_x_y_point.temperature_K,
-                                            coeffs = param_coeffs[0])
-            BIP_21_calc = polynomial.evaluate(temperature_K = T_x_y_point.temperature_K,
-                                            coeffs = param_coeffs[1])
-            theta = np.array([BIP_12_calc, BIP_21_calc])
+        return gamma_1, gamma_2
 
-            error_val = self.objective_function_elementwise(
-                theta = theta,
-                regression_params = {
-                    'x1': np.array([point.x1_mol_frac for point in T_x_y_point.data]),
-                    'y1': np.array([point.y1_mol_frac for point in T_x_y_point.data]),
-                    'pressure_Pa': np.array([point.pressure_Pa for point in T_x_y_point.data]),
-                    'temperature_K': T_x_y_point.temperature_K,
-                    'saturation_pressure_Pa_1': T_x_y_point.comp_1_saturation_pressure_Pa,
-                    'saturation_pressure_Pa_2': T_x_y_point.comp_2_saturation_pressure_Pa,
-                    'eos_backend': eos_backend
-                })
-            error_data.append(error_val)
 
-        return sum(error_data)
