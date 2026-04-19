@@ -4,6 +4,7 @@ Module to store all classess and functions related to configuring optimization a
 import numpy as np
 
 from scipy.optimize import minimize as scipy_minimize
+from scipy.optimize import Bounds as ScipyBounds
 
 from pymoo.core.problem import Problem
 from pymoo.core.population import Population
@@ -300,17 +301,25 @@ class PolynomialElementwiseEstimator():
                             current_BIP_count: int) -> float:
         
         " Objective function for DIPPR polynomial regression of Wilson BIP parameters. "
-        
-        error_data = []
-        k_mid = len(self.temperature_K_data)//2
-        for k in range(len(self.temperature_K_data)):
-            BIP_ij_exp  = self.BIP_elementwise_results[k, current_BIP_count]
-            BIP_ij_calc = self.polynomial.evaluate(temperature_K = self.temperature_K_data[k],
-                                                      coeffs = coeffs)
-            error = (BIP_ij_exp - BIP_ij_calc)**2
-            error_data.append(error)
 
-        return sum(error_data)
+        " implementation is safeguarded for any potential errors that can be thrown by numpy"
+
+        try:
+            with np.errstate(invalid="raise", divide="raise", over="raise"):
+                error_data = []
+                for k in range(len(self.temperature_K_data)):
+                    BIP_ij_exp  = self.BIP_elementwise_results[k, current_BIP_count]
+                    BIP_ij_calc = self.polynomial.evaluate(
+                        temperature_K = self.temperature_K_data[k],
+                        coeffs = coeffs
+                    )
+                    error = (BIP_ij_exp - BIP_ij_calc)**2
+                    error_data.append(error)
+
+                return sum(error_data)
+
+        except FloatingPointError as e:
+            return 1e20
 
 
     def estimate_coefficients(self) -> list:

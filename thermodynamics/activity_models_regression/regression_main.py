@@ -20,7 +20,7 @@ def main():
                                                                  equation_of_state=SoaveRedlichKwongEoSBackend,
                                                                  VLE_data=VLE_data,
                                                                  polynomial=PolynomialExponentialDIPPR(degree=4),
-                                                                 polynomial_form=NormalizedForm)
+                                                                 polynomial_form=AbsoluteForm)
     wilson_BIP_estimator.regress_BIP_parameters_elementwise()
     wilson_BIP_estimator.estimate_polynomial_from_elementwise_optimisation()
     # wilson_BIP_estimator.estimate_polynomial_from_VLE_data(n_jobs=1, is_memetic=True, verbose=True)
