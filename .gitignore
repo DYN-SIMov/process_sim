@@ -11,4 +11,7 @@
 # ignoring auxiliary files
 tmp_routines/
 
+# ignoring the co=pilot files
+github/ 
+
 
