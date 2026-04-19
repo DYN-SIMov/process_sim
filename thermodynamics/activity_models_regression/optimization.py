@@ -227,6 +227,58 @@ class PolynomialExponentialDIPPR():
         initial_guess = np.array([0.5, 0.1, 0.1, 0.1])
 
         return initial_guess
+    
+
+
+class PolynomialNRTL(): 
+
+    " 4 parameter polynominal for NRTL model: "
+    " Lambda_ij = exp(A + B/T + C*ln(T) + D*T). "
+    " Based on simplified version of the polynomial form described in docs "
+    " of thermo python library (thermo.Wilson). "
+
+    def __init__(self,
+                 degree: int):
+        self.degree = degree
+        pass
+
+
+    def evaluate(self,
+                 temperature_K: np.ndarray,
+                 coeffs: np.ndarray) -> np.ndarray:
+        """
+        Method to evaluate the DIPPR polynomial with exponential term
+        """
+
+        T = temperature_K
+        A,B,C,D = coeffs
+
+        tau = A + B/T + C*np.log(T) + D*T
+
+        return tau
+    
+
+    def get_bounds_scipy(self) -> tuple:
+        """
+        Method to get bounds for the DIPPR polynomial coefficients for scipy optimization
+        """
+
+        bounds = ((-1e2,1e2),   # A
+                  (-1e3,1e3),   # B
+                  (-1e3,1e3),   # C
+                  (-1e1,1e1))   # D
+
+        return bounds
+    
+
+    def get_initial_guess_scipy(self) -> np.ndarray:
+        """
+        Method to get initial guess for the DIPPR polynomial coefficients for scipy optimization
+        """
+
+        initial_guess = np.array([0.5, 0.1, 0.1, 0.1])
+
+        return initial_guess
 
 
 
@@ -330,20 +382,37 @@ class PolynomialElementwiseEstimator():
 
         for current_BIP_count in range(0,total_number_of_BIP):
 
-            current_esitmation_run = scipy_minimize(fun = self._objective_function,
-                                        x0 = self.polynomial.get_initial_guess_scipy(),
-                                        method = LocalOptimizationMethod.NELDER_MEAD.value,
-                                        args = (current_BIP_count),
-                                        bounds = self.polynomial.get_bounds_scipy())
+            current_esitmation_run = scipy_minimize(
+                fun = self._objective_function,
+                    x0 = self.polynomial.get_initial_guess_scipy(),
+                    method = LocalOptimizationMethod.NELDER_MEAD.value,
+                    args = (current_BIP_count),
+                    bounds = self.polynomial.get_bounds_scipy()
+                )
 
-            if current_esitmation_run.success:
-                BIP_coeffs_estimation_results.append(current_esitmation_run)
-            else:
-                msg = (f" Polynomial coefficient estimation [error]: "
-                       f" Optimization for BIP index {current_BIP_count} did not converge. ")
-                raise RuntimeError(msg)
+            if not self._optimization_converged(current_esitmation_run):
+                raise LocalOptimizationError(
+                    f" BIP estimation failed for BIP number {current_BIP_count}. "
+                    f"Optimizer output message: {current_esitmation_run.message}"
+                )
+
+            BIP_coeffs_estimation_results.append(current_esitmation_run)
 
         return BIP_coeffs_estimation_results
+    
+
+    @staticmethod
+    def _optimization_converged(opt_result) -> bool: 
+
+        condition = (
+            opt_result.success or
+            opt_result.message in [
+                    "Optimization terminated successfully.", 
+                    "Maximum number of iterations has been exceeded.",
+                    "Maximum number of function evaluations has been exceeded."
+            ]
+        ) 
+        return condition
 
 
 

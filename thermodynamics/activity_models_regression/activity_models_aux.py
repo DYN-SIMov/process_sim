@@ -151,7 +151,7 @@ class WilsonActivityModelRegression(WilsonActivityModel):
     @staticmethod
     def get_polynomial_coeffs_estimation_message(estimation_results: list) -> None:
         
-        msg = (f"\n DIPPR 4th order polynomial regression of Wilson BIP parameters converged successfully. \n"
+        msg = (f"\n Polynomial regression of Wilson BIP parameters converged successfully. \n"
                f" Fitted coefficients for Lambda_12: A = {estimation_results[0].x[0]:.4f}, "
                f"B = {estimation_results[0].x[1]:.4f}, C = {estimation_results[0].x[2]:.4f}, "
                f"D = {estimation_results[0].x[3]:.4f}. Residual = {estimation_results[0].fun:.4e}. "
@@ -232,3 +232,136 @@ class NRTLActivityModelRegression(NRTLActivityModel):
         return gamma_1, gamma_2
 
 
+    @staticmethod
+    def initial_guess_elementwise(initial_guess) -> np.ndarray:
+        
+        """
+        Method to specify initial guess input for the elementwise estimation of NRTL BIPs
+        """
+
+        if initial_guess is None:
+            if NRTLActivityModelRegression.alpha_is_fixed:
+                return np.array([1.0, 1.0])
+            else:
+                return np.array([1.0, 1.0, 0.3, 0.3])
+        else:
+            return initial_guess
+        
+
+    @staticmethod
+    def get_bounds_elementwise() -> tuple:
+
+        """
+        Method to get bounds for elementwise estimation of NRTL BIP
+        """
+
+        tau_12_bounds = (1e-3, None)
+        tau_21_bounds = (1e-3, None)
+        
+        if NRTLActivityModelRegression.alpha_is_fixed:
+            bounds = (tau_12_bounds, tau_21_bounds)
+        else:
+            alpha_12_bounds = (1e-3, None)
+            alpha_21_bounds = (1e-3, None)
+            bounds = (tau_12_bounds, tau_21_bounds, alpha_12_bounds, alpha_21_bounds)
+
+        return bounds
+    
+    
+    @staticmethod
+    def get_message_elementwise(regression_params: dict,
+                                components: list[str],
+                                result) -> None:
+        
+        """
+        Method to print a interim results of the elementwise estimation of NRTL activity coefficients
+        """
+
+        temperature_K = regression_params['temperature_K']
+        pressure_atm  = np.divide(regression_params['pressure_Pa'], 1e5)
+        x1_val = regression_params['x1']
+        y1_val = regression_params['y1']
+
+        if result.success:
+
+            if len(pressure_atm) > 1:
+                press_msg = f"P range = {min(pressure_atm):.2f} - {max(pressure_atm):.2f} atm, "
+                comp_msg  = f"x_{components[0]} range = {min(x1_val):.3f} - {max(x1_val):.3f}, " \
+                            f"y_{components[0]} range = {min(y1_val):.3f} - {max(y1_val):.3f}"
+            elif len(pressure_atm) == 1:
+                press_msg = f"P = {pressure_atm[0]:.2f} atm, "
+                comp_msg  = f"x_{components[0]} = {x1_val[0]:.3f}, y_{components[0]} = {y1_val[0]:.3f}"
+            else:
+                raise ValueError(" Either pressure of component data array is empty. ")
+
+            if NRTLActivityModelRegression.alpha_is_fixed:
+                msg = (f"T = {temperature_K:.2f} K, " + 
+                    press_msg + 
+                    comp_msg + "\n" +
+                    " --> Fitted NRTL BIP parameters: "
+                    f" tau_12 = {result.x[0]:.4f}, "
+                    f" tau_21 = {result.x[1]:.4f}. "
+                    f" residual = {result.fun:.4e}.")
+            else:
+                msg = (f"T = {temperature_K:.2f} K, " + 
+                    press_msg + 
+                    comp_msg + "\n" +
+                    " --> Fitted NRTL BIP parameters: "
+                    f" tau_12 = {result.x[0]:.4f}, "
+                    f" tau_21 = {result.x[1]:.4f}, "
+                    f" alpha_12 = {result.x[2]:.4f}, "
+                    f" alpha_21 = {result.x[3]:.4f}. "
+                    f" residual = {result.fun:.4e}.")
+            
+        else:
+            msg = (f" BIP parameters regression did not converge: "
+                   f" {result.message} ")
+
+        print(msg)
+
+    
+    @staticmethod
+    def get_polynomial_coeffs_estimation_message(estimation_results: list) -> None:
+        
+        if NRTLActivityModelRegression.alpha_is_fixed:
+            msg = (
+                f"\n Polynomial regression of NRTL BIP parameters converged successfully. \n"
+                f" Fitted coefficients for tau_12: A = {estimation_results[0].x[0]:.4f}, "
+                f"B = {estimation_results[0].x[1]:.4f}, C = {estimation_results[0].x[2]:.4f}, "
+                f"D = {estimation_results[0].x[3]:.4f}. Residual = {estimation_results[0].fun:.4e}. "
+                f"\n Fitted coefficients for tau_21: A = {estimation_results[1].x[0]:.4f}, " 
+                f"B = {estimation_results[1].x[1]:.4f}, C = {estimation_results[1].x[2]:.4f}, " 
+                f"D = {estimation_results[1].x[3]:.4f}. Residual = {estimation_results[1].fun:.4e}. "
+            )
+        else: 
+            msg = (
+                " MESSAGE FOR NRTL POLYNOMIAL REGRESSION WITH VARIABLE ALPHA IS NOT IMPLEMENTED YET. "
+            )
+
+        print(colored(msg, 'green'))
+
+
+        pass
+
+
+    @staticmethod
+    def get_message_estimation_from_VLE(coeffs: list,
+                                        total_residual: float) -> None:
+        
+        if NRTLActivityModelRegression.alpha_is_fixed:
+            msg = (
+                f"\n Polynomial regression of NRTL BIP parameters converged successfully. \n"
+                f" Fitted coefficients for tau_12: A = {coeffs[0]:.4f}, "
+                f"B = {coeffs[1]:.4f}, C = {coeffs[2]:.4f}, D = {coeffs[3]:.4f}. "
+                f"\n Fitted coefficients for tau_21: A = {coeffs[4]:.4f}, " 
+                f"B = {coeffs[5]:.4f}, C = {coeffs[6]:.4f}, D = {coeffs[7]:.4f}. "
+                f"\n Total residual = {total_residual:.4e}. "
+            )
+        else: 
+            msg = (
+                " MESSAGE FOR NRTL POLYNOMIAL REGRESSION WITH VARIABLE ALPHA IS NOT IMPLEMENTED YET. "
+            )
+        
+        print(colored(msg, 'green'))
+
+        pass

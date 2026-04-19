@@ -41,11 +41,17 @@ class BinaryInteractionParametersRegression():
         self.VLE_data = VLE_data
         self.polynomial = polynomial_form(polynomial) if polynomial is not None else None
 
-        pure_component_data_backend = PureComponentDataBackend(components=self.VLE_data.components)
-        self.eos_backend = equation_of_state(components=self.VLE_data.components,
-                                             pure_component_data_backend=pure_component_data_backend)
-        self.activity_model_backend = activity_model_regression(components=self.VLE_data.components,
-                                                                pure_component_data_backend=pure_component_data_backend)
+        pure_component_data_backend = PureComponentDataBackend(
+            components=self.VLE_data.components
+        )
+        self.eos_backend = equation_of_state(
+            components=self.VLE_data.components,
+            pure_component_data_backend=pure_component_data_backend
+        )
+        self.activity_model_backend = activity_model_regression(
+            components=self.VLE_data.components,
+            pure_component_data_backend=pure_component_data_backend
+        )
         
         self.elementwise_opt_results: list = None
         self.BIP_polynomial_coeffs: dict = None
@@ -275,7 +281,6 @@ class BinaryInteractionParametersRegression():
             error_data.append(error_val)
 
         return sum(error_data)
-
 
 
     def results_visualization(self,
