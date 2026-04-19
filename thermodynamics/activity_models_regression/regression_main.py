@@ -1,0 +1,44 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+from thermodynamics.core.properties import SoaveRedlichKwongEoSBackend
+
+from data_handling import VLEData
+from regression_aux import BinaryInteractionParametersRegression
+from activity_models_aux import WilsonActivityModelRegression, NRTLActivityModelRegression
+from optimization import PolynomialExponentialDIPPR, PolynomialRegular, PolynomialNRTL
+from optimization import AbsoluteForm, NormalizedForm
+
+
+
+def main():
+
+    VLE_data = VLEData(filepath = 'thermodynamics/activity_models_regression/thermo_data/VLE_isobaric_MeOH_H2O.csv')
+    # VLE_data = VLEData(filepath = 'thermodynamics/activity_models_regression/thermo_data/VLE_H2O_NH3.csv')
+    
+    wilson_BIP_estimator = BinaryInteractionParametersRegression(
+        activity_model_regression=NRTLActivityModelRegression,
+        equation_of_state=SoaveRedlichKwongEoSBackend,
+        VLE_data=VLE_data,
+        polynomial=PolynomialNRTL(degree=4),
+        polynomial_form=AbsoluteForm
+    )
+
+    wilson_BIP_estimator.regress_BIP_parameters_elementwise()
+    wilson_BIP_estimator.estimate_polynomial_from_elementwise_optimisation()
+    # wilson_BIP_estimator.estimate_polynomial_from_VLE_data(n_jobs=4, is_memetic=True, verbose=True)
+    wilson_BIP_estimator.results_visualization(get_parity_plot=True,
+                                               get_VLE_curve=True)
+
+    pass
+
+
+if __name__ == "__main__": 
+    main()
+
+
+
+" TODO: "
+" 2) add NRTL and see if it works better with the 4p polynomial for MeOH-H2O "
+" 3) add simple regression from elementwise BIP's optimisation with numpy.polyfit"
+" 4) add the functionality for recording the results of the polynomial's coefficient"
