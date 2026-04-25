@@ -335,6 +335,7 @@ class BinaryInteractionParametersRegression():
         x1_exp_data_plot = visualization_data['x1_exp_data']
         y1_calc_elementwise_data_plot = visualization_data['y1_calc_elementwise_data']
         y2_calc_elementwise_data_plot = visualization_data['y2_calc_elementwise_data']
+        point_indices = visualization_data['point_indices']
 
         # Estimating R2 coefficients  
         [slope_y1, 
@@ -364,9 +365,16 @@ class BinaryInteractionParametersRegression():
             plt.scatter(x1_exp_data_plot, y1_exp_data_plot, 
                         color='red', label=f'exp data for {self.VLE_data.components[0]}'
             )
-            plt.plot(x1_exp_data_plot, y1_calc_data_plot, 
-                     color='blue', label=f'calc data for {self.VLE_data.components[0]}'
-            )
+            
+            unique_indices = sorted(list(set(point_indices)))
+            for i, p_idx in enumerate(unique_indices):
+                idx_mask = [k for k, val in enumerate(point_indices) if val == p_idx]
+                x_curve = [x1_exp_data_plot[k] for k in idx_mask]
+                y_calc_curve = [y1_calc_data_plot[k] for k in idx_mask]
+                
+                label = f'calc data for {self.VLE_data.components[0]}' if i == 0 else "_nolegend_"
+                plt.plot(x_curve, y_calc_curve, color='blue', label=label)
+
             if self.elementwise_opt_results is not None: 
                 plt.scatter(x1_exp_data_plot, y1_calc_elementwise_data_plot, 
                             color='green', 
@@ -391,13 +399,39 @@ class BinaryInteractionParametersRegression():
 
     def _extract_visualization_data(self) -> dict: 
 
+        """
+        Method for extracting the data for visualization of regression results.
+
+        Args: 
+            None
+        Returns:
+            dict: A dictionary containing the data for visualization, including:
+                - x1_exp_data: A list of experimental x1 mol fraction data points.
+                - y1_exp_data: A list of experimental y1 mol fraction data points.
+                - x2_exp_data: A list of experimental x2 mol fraction data points.
+                - y2_exp_data: A list of experimental y2 mol fraction data points.
+                - y1_calc_data: A list of calculated y1 mol fraction data points based on 
+                    the regressed BIP polynomial.
+                - y2_calc_data: A list of calculated y2 mol fraction data points based on 
+                    the regressed BIP polynomial.
+                - y1_calc_elementwise_data: A list of calculated y1 mol fraction data points
+                    based on the elementwise regression of BIP parameters.
+                - y2_calc_elementwise_data: A list of calculated y2 mol fraction data points
+                    based on the elementwise regression of BIP parameters.
+                - point_indices: A list of indices corresponding to each data point, indicating
+                    which temperature point (i.e., T_x_y_point) it belongs to. This is useful for 
+                    keeping track when there are several data points for each T-x-y point. 
+                    This variable is also used for visualization of VLE curves, 
+                    where the data points from the same T-x-y point are connected with a line.
+        """
+
         temperature_K_data = []
         pressure_Pa_data = []
         x1_exp_data = []
         y1_exp_data = []
         saturation_pressure_Pa_1_data = []
         saturation_pressure_Pa_2_data = []
-        point_indices = []
+        point_indices = [] 
 
         for pt_idx, T_x_y_point in enumerate(self.VLE_data.T_x_y_points):
             x1_exp_data.extend([datum.x1_mol_frac for datum in T_x_y_point.data])
@@ -483,7 +517,8 @@ class BinaryInteractionParametersRegression():
             'y1_calc_data': y1_calc_data_plot,
             'y2_calc_data': y2_calc_data_plot,
             'y1_calc_elementwise_data': y1_calc_elementwise_data_plot,
-            'y2_calc_elementwise_data': y2_calc_elementwise_data_plot
+            'y2_calc_elementwise_data': y2_calc_elementwise_data_plot,
+            'point_indices': point_indices
         }
 
 

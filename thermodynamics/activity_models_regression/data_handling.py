@@ -116,8 +116,10 @@ class RawExperimentalData(list[DataPoint]):
 class VLEData():
     
     def __init__(self,
-                 filepath: str):
+                 filepath: str, 
+                 remove_extreme_concentrations: bool = True):
         self.filepath = filepath
+        self.remove_extreme_concentrations = remove_extreme_concentrations 
         self.components: list[str] = self._parse_components_from_comment(filepath = filepath)
         self.raw_dataframe: pd.DataFrame = pd.read_csv(filepath_or_buffer = filepath, comment='#')
         self.raw_data: RawExperimentalData = self._extract_data_from_data_frame(dataframe = self.raw_dataframe)
@@ -179,7 +181,10 @@ class VLEData():
             )
             raw_data.append(data_point)    
         
-        return RawExperimentalData(data_points = raw_data)
+        return RawExperimentalData(
+            data_points = raw_data,
+            remove_extreme_concentrations=self.remove_extreme_concentrations
+        )
     
 
     def _get_saturation_pressure_data(self) -> None:
