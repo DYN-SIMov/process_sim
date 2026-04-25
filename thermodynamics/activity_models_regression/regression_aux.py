@@ -47,7 +47,7 @@ class BinaryInteractionParametersRegression():
         self.eos_backend = equation_of_state(
             components=self.VLE_data.components,
             pure_component_data_backend=pure_component_data_backend
-        )
+        ) if equation_of_state is not None else None
         self.activity_model_backend = activity_model_regression(
             components=self.VLE_data.components,
             pure_component_data_backend=pure_component_data_backend
@@ -221,20 +221,20 @@ class BinaryInteractionParametersRegression():
             # ideal gas assumption if no EoS backend is specified
             fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   
 
-        # based on the modified Raoult's law: y_i * fi_i * P_total= x_i * gamma_i * P_sat_i 
+        # based on the modified Raoult's law: y_i * fi_i * P_total = x_i * gamma_i * P_sat_i 
+        pressure_total_Pa_calc = (
+            (x1_val * gamma_1_calc * saturation_pressure_Pa_1) / fugacity_coef_1 + 
+            (x2_val * gamma_2_calc * saturation_pressure_Pa_2) / fugacity_coef_2
+        )
+        
         y_calc_val_1 = (
             x1_val * gamma_1_calc * saturation_pressure_Pa_1 / 
-            (pressure_Pa * fugacity_coef_1)
+            (pressure_total_Pa_calc * fugacity_coef_1)
         )
         y_calc_val_2 = (
             x2_val * gamma_2_calc * saturation_pressure_Pa_2 / 
-            (pressure_Pa * fugacity_coef_2)
+            (pressure_total_Pa_calc * fugacity_coef_2)
         )
-            
-        pressure_total_Pa_calc = (
-            (x1_val * gamma_1_calc * saturation_pressure_Pa_1) / (y_calc_val_1 * fugacity_coef_1) + 
-              (x2_val * gamma_2_calc * saturation_pressure_Pa_2) / (y_calc_val_2 * fugacity_coef_2)
-        )/2
         
         return {
             'y_calc_val_1': y_calc_val_1,
