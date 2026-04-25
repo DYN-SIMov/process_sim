@@ -386,7 +386,7 @@ class PolynomialElementwiseEstimator():
                 fun = self._objective_function,
                     x0 = self.polynomial.get_initial_guess_scipy(),
                     method = LocalOptimizationMethod.NELDER_MEAD.value,
-                    args = (current_BIP_count),
+                    args = (current_BIP_count,),
                     bounds = self.polynomial.get_bounds_scipy()
                 )
 

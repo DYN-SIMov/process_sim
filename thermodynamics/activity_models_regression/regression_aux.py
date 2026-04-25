@@ -397,8 +397,9 @@ class BinaryInteractionParametersRegression():
         y1_exp_data = []
         saturation_pressure_Pa_1_data = []
         saturation_pressure_Pa_2_data = []
+        point_indices = []
 
-        for T_x_y_point in self.VLE_data.T_x_y_points:
+        for pt_idx, T_x_y_point in enumerate(self.VLE_data.T_x_y_points):
             x1_exp_data.extend([datum.x1_mol_frac for datum in T_x_y_point.data])
             y1_exp_data.extend([datum.y1_mol_frac for datum in T_x_y_point.data])
             pressure_Pa_data.extend([datum.pressure_Pa for datum in T_x_y_point.data])
@@ -409,6 +410,7 @@ class BinaryInteractionParametersRegression():
             saturation_pressure_Pa_2_data.extend(
                 [T_x_y_point.comp_2_saturation_pressure_Pa] * len(T_x_y_point.data)
             )
+            point_indices.extend([pt_idx] * len(T_x_y_point.data))
 
         x1_exp_data_plot        = []
         y1_exp_data_plot        = []
@@ -432,9 +434,9 @@ class BinaryInteractionParametersRegression():
             saturation_pressure_Pa_2 = saturation_pressure_Pa_2_data[k]
 
             BIP_values = []
-            for k in range(0, len(self.BIP_polynomial_coeffs)):
+            for j in range(0, len(self.BIP_polynomial_coeffs)):
                 BIP_val = self.polynomial.evaluate(temperature_K = temperature_K,
-                                                   coeffs = self.BIP_polynomial_coeffs[k])
+                                                   coeffs = self.BIP_polynomial_coeffs[j])
                 BIP_values.append(BIP_val)
 
             output = self._estimate_y_calculated(
@@ -457,7 +459,8 @@ class BinaryInteractionParametersRegression():
             y2_calc_data_plot.append(output['y_calc_val_2'])
 
             if self.elementwise_opt_results is not None:
-                BIP_elementwise_values = self.elementwise_opt_results[k]
+                pt_idx = point_indices[k]
+                BIP_elementwise_values = self.elementwise_opt_results[pt_idx]
                 output_elementwise = self._estimate_y_calculated(
                     x1_val = x1_exp,
                     y1_val = y1_exp,
