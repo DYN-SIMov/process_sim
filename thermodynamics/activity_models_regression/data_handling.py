@@ -87,7 +87,7 @@ class RawExperimentalData(list[DataPoint]):
                     TxyPoint(data_points = constant_temperature_points) if constant_temperature_points 
                         else TxyPoint(data_points = [point])
                         )
-                constant_temperature_points = []
+                constant_temperature_points = [point]
                 reference_temperature_data.append(point.temperature_K)
             else:
                 constant_temperature_points.append(point)

@@ -13,8 +13,8 @@ from optimization import AbsoluteForm, NormalizedForm
 
 def main():
 
-    # VLE_data = VLEData(filepath = 'thermodynamics/activity_models_regression/thermo_data/VLE_isobaric_MeOH_H2O.csv')
-    VLE_data = VLEData(filepath = 'thermodynamics/activity_models_regression/thermo_data/VLE_H2O_NH3.csv')
+    VLE_data = VLEData(filepath = 'thermodynamics/activity_models_regression/thermo_data/VLE_isobaric_MeOH_H2O.csv')
+    # VLE_data = VLEData(filepath = 'thermodynamics/activity_models_regression/thermo_data/VLE_H2O_NH3.csv')
     
     wilson_BIP_estimator = BinaryInteractionParametersRegression(
         activity_model_regression=WilsonActivityModelRegression,

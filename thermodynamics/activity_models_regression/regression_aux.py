@@ -282,8 +282,8 @@ class BinaryInteractionParametersRegression():
             pressure_total_Pa_calc = output['pressure_total_Pa_calc']
     
             error = (
-                (y1_exp_val - y1_calc_val)**2 + 
-                (y2_exp_val - y2_calc_val)**2 + 
+                ((y1_exp_val - y1_calc_val)/y1_exp_val)**2 + 
+                ((y2_exp_val - y2_calc_val)/y2_exp_val)**2 + 
                 ((pressure_Pa_data[k] - pressure_total_Pa_calc)/pressure_Pa_data[k])**2
             )
             error_data.append(error)
