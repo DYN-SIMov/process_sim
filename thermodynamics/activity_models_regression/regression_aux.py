@@ -195,6 +195,54 @@ class BinaryInteractionParametersRegression():
         pass
 
 
+    def _estimate_y_calculated(self,
+                               x1_val:float,
+                               y1_val:float,
+                               pressure_Pa:float,
+                               temperature_K:float,
+                               saturation_pressure_Pa_1:float,
+                               saturation_pressure_Pa_2:float,
+                               BIP_coeffs:np.ndarray) -> dict: 
+
+        x2_val = 1 - x1_val
+        y2_val = 1 - y1_val
+        
+        gamma_1_calc, gamma_2_calc = self.activity_model_backend.get_activity_coefs(
+            theta = BIP_coeffs,
+            x_val = x1_val
+        )
+
+        if self.eos_backend is not None:
+            fugacity_coef_1, fugacity_coef_2  = self.eos_backend.get_fugacity_coefs(
+                temperature_K = temperature_K,
+                pressure_Pa = pressure_Pa,
+                molar_composition = np.array([y1_val, y2_val])) 
+        else: 
+            # ideal gas assumption if no EoS backend is specified
+            fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   
+
+        # based on the modified Raoult's law: y_i * fi_i * P_total= x_i * gamma_i * P_sat_i 
+        y_calc_val_1 = (
+            x1_val * gamma_1_calc * saturation_pressure_Pa_1 / 
+            (pressure_Pa * fugacity_coef_1)
+        )
+        y_calc_val_2 = (
+            x2_val * gamma_2_calc * saturation_pressure_Pa_2 / 
+            (pressure_Pa * fugacity_coef_2)
+        )
+            
+        pressure_total_Pa_calc = (
+            (x1_val * gamma_1_calc * saturation_pressure_Pa_1) / (y_calc_val_1 * fugacity_coef_1) + 
+              (x2_val * gamma_2_calc * saturation_pressure_Pa_2) / (y_calc_val_2 * fugacity_coef_2)
+        )/2
+        
+        return {
+            'y_calc_val_1': y_calc_val_1,
+            'y_calc_val_2': y_calc_val_2,
+            'pressure_total_Pa_calc': pressure_total_Pa_calc
+        }
+
+
     def _objective_function_elementwise(self, 
                                         theta: np.ndarray,
                                         regression_params) -> float:
@@ -213,37 +261,31 @@ class BinaryInteractionParametersRegression():
 
         error_data = []
         for k in range(len(x_exp_data)):
-            x_exp_val = x_exp_data[k]
-            y_exp_val = y_exp_data[k]
-            pressure_Pa = pressure_Pa_data[k]
-            gamma_1_calc, gamma_2_calc = self.activity_model_backend.get_activity_coefs(
-                theta=theta,
-                x_val = x_exp_val
+
+            x1_exp_val = x_exp_data[k]
+            y1_exp_val = y_exp_data[k]
+            x2_exp_val = 1 - x1_exp_val
+            y2_exp_val = 1 - y1_exp_val
+
+            output = self._estimate_y_calculated(
+                x1_val = x1_exp_val,
+                y1_val = y1_exp_val,
+                pressure_Pa = pressure_Pa_data[k],
+                temperature_K = temperature_K,
+                saturation_pressure_Pa_1 = saturation_pressure_Pa_1,
+                saturation_pressure_Pa_2 = saturation_pressure_Pa_2,
+                BIP_coeffs = theta
             )
 
-            if self.eos_backend is not None:
-                fugacity_coef_1, fugacity_coef_2  = self.eos_backend.get_fugacity_coefs(
-                    temperature_K = temperature_K,
-                    pressure_Pa = pressure_Pa,
-                    molar_composition = np.array([y_exp_val, 1 - y_exp_val])) 
-            else: 
-                # ideal gas assumption if no EoS backend is specified
-                fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   
-
-
-            # based on the modified Raoult's law: y_i * fi_i * P_total= x_i * gamma_i * P_sat_i 
-            y_calc_val_1 = x_exp_val * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
-            y_calc_val_2 = (1 - x_exp_val) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
-            
-            pressure_total_Pa_calc = ((x_exp_val * gamma_1_calc * saturation_pressure_Pa_1) / (y_calc_val_1 * fugacity_coef_1) + 
-                                        ((1 - x_exp_val) * gamma_2_calc * saturation_pressure_Pa_2) / (y_calc_val_2 * fugacity_coef_2))/2
-
-            y_exp_val_1  = y_exp_val
-            y_exp_val_2  = 1 - y_exp_val
-
-            error = ((y_exp_val_1 - y_calc_val_1)**2 + 
-                     (y_exp_val_2 - y_calc_val_2)**2 + 
-                     ((pressure_Pa - pressure_total_Pa_calc)/pressure_Pa)**2)
+            y1_calc_val = output['y_calc_val_1']
+            y2_calc_val = output['y_calc_val_2']
+            pressure_total_Pa_calc = output['pressure_total_Pa_calc']
+    
+            error = (
+                (y1_exp_val - y1_calc_val)**2 + 
+                (y2_exp_val - y2_calc_val)**2 + 
+                ((pressure_Pa_data[k] - pressure_total_Pa_calc)/pressure_Pa_data[k])**2
+            )
             error_data.append(error)
 
         return sum(error_data)
@@ -364,8 +406,20 @@ class BinaryInteractionParametersRegression():
 
         if get_VLE_curve is True: 
             plt.figure(figsize=(6,6))
-            plt.scatter(x1_exp_data_plot, y1_exp_data_plot, color='red', label=f'exp data for {self.VLE_data.components[0]}')
-            plt.plot(x1_exp_data_plot, y1_calc_data_plot, color='blue', label=f'calc data for {self.VLE_data.components[0]}')
+            plt.scatter(x1_exp_data_plot, y1_exp_data_plot, 
+                        color='red', label=f'exp data for {self.VLE_data.components[0]}'
+            )
+            plt.plot(x1_exp_data_plot, y1_calc_data_plot, 
+                     color='blue', label=f'calc data for {self.VLE_data.components[0]}'
+            )
+            if self.elementwise_opt_results is not None: 
+                [x1_exp_data_elementwise, 
+                 y1_exp_data_elementwise] = self._get_VLE_data_from_elementwise_results()
+                plt.scatter(x1_exp_data_elementwise, y1_exp_data_elementwise, 
+                            color='green', 
+                            marker='x',
+                            label=f'elementwise regression results for {self.VLE_data.components[0]}'
+                )
             plt.plot([0, 1], [0, 1], 'k--', label='y=x')
             plt.xlabel(f'x_{self.VLE_data.components[0]}')
             plt.ylabel(f'y_{self.VLE_data.components[0]}')
@@ -382,3 +436,26 @@ class BinaryInteractionParametersRegression():
         pass
 
 
+    def _get_VLE_data_from_VLE_calculations(self) -> tuple:
+
+
+
+        pass
+
+
+
+    def _get_VLE_data_from_elementwise_results(self) -> tuple: 
+
+        x1_exp_data_elementwise = []
+        y1_exp_data_elementwise = []
+
+        for k in range(len(self.elementwise_opt_results)):
+
+            pass 
+
+
+
+        return x1_exp_data_elementwise, y1_exp_data_elementwise
+
+
+    

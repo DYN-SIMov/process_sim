@@ -39,6 +39,5 @@ if __name__ == "__main__":
 
 
 " TODO: "
-" 2) add NRTL and see if it works better with the 4p polynomial for MeOH-H2O "
 " 3) add simple regression from elementwise BIP's optimisation with numpy.polyfit"
 " 4) add the functionality for recording the results of the polynomial's coefficient"
