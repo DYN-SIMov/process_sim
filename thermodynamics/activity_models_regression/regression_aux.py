@@ -366,14 +366,23 @@ class BinaryInteractionParametersRegression():
                         color='red', label=f'exp data for {self.VLE_data.components[0]}'
             )
             
+            # ----------------------------------------------------------------------------
+            # Filtering out datapoints belonging to different T-x-y curves (diffent pressures)
+            # ----------------------------------------------------------------------------
             unique_indices = sorted(list(set(point_indices)))
-            for i, p_idx in enumerate(unique_indices):
-                idx_mask = [k for k, val in enumerate(point_indices) if val == p_idx]
-                x_curve = [x1_exp_data_plot[k] for k in idx_mask]
-                y_calc_curve = [y1_calc_data_plot[k] for k in idx_mask]
-                
-                label = f'calc data for {self.VLE_data.components[0]}' if i == 0 else "_nolegend_"
+            if len(unique_indices) == len(point_indices):
+                x_curve = x1_exp_data_plot
+                y_calc_curve = y1_calc_data_plot
+                label = f'calc data for {self.VLE_data.components[0]}'
                 plt.plot(x_curve, y_calc_curve, color='blue', label=label)
+            else: 
+                for i, p_idx in enumerate(unique_indices):
+                    idx_mask = [k for k, val in enumerate(point_indices) if val == p_idx]
+                    x_curve = [x1_exp_data_plot[k] for k in idx_mask]
+                    y_calc_curve = [y1_calc_data_plot[k] for k in idx_mask]
+                    
+                    label = f'calc data for {self.VLE_data.components[0]}' if i == 0 else "_nolegend_"
+                    plt.plot(x_curve, y_calc_curve, color='blue', label=label)
 
             if self.elementwise_opt_results is not None: 
                 plt.scatter(x1_exp_data_plot, y1_calc_elementwise_data_plot, 

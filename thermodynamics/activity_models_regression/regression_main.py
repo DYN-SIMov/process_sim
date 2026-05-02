@@ -24,9 +24,9 @@ def main():
         polynomial_form=AbsoluteForm
     )
 
-    wilson_BIP_estimator.regress_BIP_parameters_elementwise()
-    wilson_BIP_estimator.estimate_polynomial_from_elementwise_optimisation()
-    # wilson_BIP_estimator.estimate_polynomial_from_VLE_data(n_jobs=4, is_memetic=True, verbose=True)
+    # wilson_BIP_estimator.regress_BIP_parameters_elementwise()
+    # wilson_BIP_estimator.estimate_polynomial_from_elementwise_optimisation()
+    wilson_BIP_estimator.estimate_polynomial_from_VLE_data(n_jobs=4, is_memetic=True, verbose=True)
     wilson_BIP_estimator.results_visualization(get_parity_plot=True,
                                                get_VLE_curve=True)
 
@@ -39,5 +39,4 @@ if __name__ == "__main__":
 
 
 " TODO: "
-" 3) add simple regression from elementwise BIP's optimisation with numpy.polyfit"
 " 4) add the functionality for recording the results of the polynomial's coefficient"
