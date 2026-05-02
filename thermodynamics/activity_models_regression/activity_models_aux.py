@@ -9,6 +9,11 @@ from termcolor import colored
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from thermodynamics.core.properties import WilsonActivityModel, NRTLActivityModel
 
+from optimization import PolynomialInterface, PolynomialExponentialDIPPR, PolynomialNRTL
+
+class PolynomialException(Exception):
+    pass
+
 
 class ActivityModelRegressionInterface(Protocol):
     @staticmethod
@@ -71,7 +76,7 @@ class WilsonActivityModelRegression(WilsonActivityModel):
                         -np.log(x_2 + lambda_21 * x_1) -
                         x_1 * lambda_12 / (x_1 + lambda_12 * x_2) +
                         x_1 * lambda_21 / (x_2 + lambda_21 * x_1)
-                    )
+        )
 
         gamma_1 = np.exp(ln_gamma_1)
         gamma_2 = np.exp(ln_gamma_2)
@@ -178,7 +183,24 @@ class WilsonActivityModelRegression(WilsonActivityModel):
 
 
         pass
-    
+
+
+    @staticmethod
+    def export_check_polynomial_type(polynomial: PolynomialInterface) -> None:
+        
+        if not isinstance(polynomial, PolynomialExponentialDIPPR):
+            raise PolynomialException(
+                f" The specified polynomial {type(polynomial)} is not compatible "
+                f"with Wilson activity model regression. \n"
+                f" Please use {PolynomialExponentialDIPPR} polynomial for regression of "
+                f"Wilson BIP parameters. "
+            )
+
+    @staticmethod
+    def get_data_for_export(): 
+
+
+        pass
 
 
 
@@ -365,3 +387,15 @@ class NRTLActivityModelRegression(NRTLActivityModel):
         print(colored(msg, 'green'))
 
         pass
+
+
+    @staticmethod
+    def export_check_polynomial_type(polynomial: PolynomialInterface) -> None:
+        
+        if not isinstance(polynomial, PolynomialNRTL):
+            raise PolynomialException(
+                f" The specified polynomial {type(polynomial)} is not compatible "
+                f"with NRTL activity model regression. \n"
+                f" Please use {PolynomialNRTL} polynomial for regression of "
+                f"NRTL BIP parameters. "
+            )

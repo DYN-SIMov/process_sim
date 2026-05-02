@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+import re
 
 from termcolor import colored        # for colored text output
 
@@ -121,6 +122,7 @@ class VLEData():
         self.filepath = filepath
         self.remove_extreme_concentrations = remove_extreme_concentrations 
         self.components: list[str] = self._parse_components_from_comment(filepath = filepath)
+        self.source: str = self._parse_source_from_comment(filepath = filepath)
         self.raw_dataframe: pd.DataFrame = pd.read_csv(filepath_or_buffer = filepath, comment='#')
         self.raw_data: RawExperimentalData = self._extract_data_from_data_frame(dataframe = self.raw_dataframe)
         self.T_x_y_points: list[TxyPoint] = self.raw_data.find_constant_temperature_points()
@@ -131,12 +133,16 @@ class VLEData():
     @staticmethod
     def _parse_components_from_comment(filepath: str) -> list[str]:
 
-        "Function to parse component names from comment lines in the data file. "
-
         components = []
+
+        # ^# matches a line starting with #
+        # \s* matches any number of spaces
+        # (component | chemical) matches either word 
+        pattern = re.compile(r"^#\s*(component|chemical)\b[\s:]*(.*)", re.IGNORECASE)
+
         with open(filepath, "r") as f:
             for line in f:
-                if line.startswith("# Component"):
+                if pattern.match(line):
                     comment_line = line.strip()
                     components.append(comment_line.split()[-1])
         
@@ -146,6 +152,25 @@ class VLEData():
         
         return components
     
+
+    @staticmethod
+    def _parse_source_from_comment(filepath: str) -> str:
+        
+        source = "no data source provided"
+
+        # ^#\s* matches '#' followed by optional spaces
+        # (source|reference) \b matches the word, ensuring that we capture 'source' or 'reference' as whole words
+        # [\s:]* ignores any spaces or colons immediately following the word
+        # (.*) captures the rest of the line (the actual source text)
+        pattern = re.compile(r"^#\s*(source|reference)\b[\s:]*(.*)", re.IGNORECASE)
+
+        with open(filepath, "r") as f:
+            for line in f:
+                if pattern.match(line):
+                    source = pattern.match(line).group(2).strip()  # Extract the source text and remove leading/trailing whitespace
+                    break
+        return source
+
 
     def _extract_data_from_data_frame(self,
                                       dataframe: pd.DataFrame) -> RawExperimentalData:
