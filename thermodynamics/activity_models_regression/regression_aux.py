@@ -28,15 +28,16 @@ from data_handling import VLEData
 
 from optimization import PymooPolynomialEstimator
 
+from typing import Type
 
 class BinaryInteractionParametersRegression(): 
 
     def __init__(self,
-                 activity_model_regression: ActivityModelRegressionInterface = None,
-                 equation_of_state: EquationOfStateInterface = None,
+                 activity_model_regression: Type[ActivityModelRegressionInterface] = None,
+                 equation_of_state: Type[EquationOfStateInterface] = None,
                  VLE_data: VLEData = None,
                  polynomial: PolynomialExponentialDIPPR = None,
-                 polynomial_form: PolynominalFormInterface = AbsoluteForm) -> None: 
+                 polynomial_form: Type[PolynominalFormInterface] = AbsoluteForm) -> None: 
 
         self.VLE_data = VLE_data
         self.polynomial = polynomial_form(polynomial) if polynomial is not None else None
@@ -55,6 +56,7 @@ class BinaryInteractionParametersRegression():
         
         self.elementwise_opt_results: list = None
         self.BIP_polynomial_coeffs: dict = None
+        self.goodness_of_fit: float = None
 
         pass
         
@@ -104,7 +106,7 @@ class BinaryInteractionParametersRegression():
     def estimate_polynomial_from_elementwise_optimisation(self) -> None:
 
         " Method for regressing DIPPR polynomial parameters based on results of elementwise "
-        " regression of Wilson Binary Interaction Parameters"
+        " regression of Binary Interaction Parameters"
         
         if self.elementwise_opt_results is None:
             raise ValueError(" Elementwise optimisation results not found. "
@@ -129,6 +131,8 @@ class BinaryInteractionParametersRegression():
                 coeffs=BIP_coeffs[k]
             ) for k in range(len(BIP_coeffs))
         ]
+        
+        self.calculate_goodness_of_fit()
         
         pass
 
@@ -188,8 +192,9 @@ class BinaryInteractionParametersRegression():
         self.BIP_polynomial_coeffs = [
             self.polynomial.get_absolute_coeffs(
                 coeffs=BIP_coeffs[k]
-            ) for k in range(len(BIP_coeffs))
-        ]
+            ) for k in range(len(BIP_coeffs))]
+        
+        self.calculate_goodness_of_fit()
 
 
         pass
@@ -325,6 +330,25 @@ class BinaryInteractionParametersRegression():
         return sum(error_data)
 
 
+    def calculate_goodness_of_fit(self) -> None:
+        """
+        Calculates the goodness of fit (R^2) for the regressed model.
+        """
+        if self.BIP_polynomial_coeffs is None:
+            return
+        
+        visualization_data = self._extract_visualization_data()
+        y1_exp_data_plot = visualization_data['y1_exp_data']
+        y1_calc_data_plot = visualization_data['y1_calc_data']
+        
+        [slope_y1, 
+         intercept_y1, 
+         r_value_y1, 
+         p_value_y1, 
+         std_err_y1] = linregress(y1_exp_data_plot, y1_calc_data_plot)
+        self.goodness_of_fit = r_value_y1**2
+
+
     def results_visualization(self,
                               get_parity_plot,
                               get_VLE_curve) -> None:
@@ -337,12 +361,8 @@ class BinaryInteractionParametersRegression():
         y2_calc_elementwise_data_plot = visualization_data['y2_calc_elementwise_data']
         point_indices = visualization_data['point_indices']
 
-        # Estimating R2 coefficients  
-        [slope_y1, 
-         intercept_y1, 
-         r_value_y1, 
-         p_value_y1, 
-         std_err_y1] = linregress(y1_exp_data_plot, y1_calc_data_plot)
+        if self.goodness_of_fit is None:
+            self.calculate_goodness_of_fit()
 
         if get_parity_plot is True: 
             plt.figure(figsize=(6,6))
@@ -354,7 +374,7 @@ class BinaryInteractionParametersRegression():
             plt.ylabel(f'Calculated y_{self.VLE_data.components[0]}')
             plt.title(f'Parity Plot for VLE of {self.VLE_data.components[0]} and '
                       f'{self.VLE_data.components[1]} \n'
-                      f'R2 {self.VLE_data.components[0]} =  {r_value_y1**2:.3f}')   
+                      f'R2 {self.VLE_data.components[0]} =  {self.goodness_of_fit:.3f}')   
             plt.xlim(0, 1)
             plt.ylim(0, 1)
             plt.legend()
@@ -401,7 +421,7 @@ class BinaryInteractionParametersRegression():
 
             pass 
         
-        input("Press Enter to continue...")
+        input("Press any key to exit the visualization...")
 
         pass
 

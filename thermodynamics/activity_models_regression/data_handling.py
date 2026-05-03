@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import pandas as pd
 import numpy as np
 import re
@@ -12,25 +14,20 @@ class VLEDataError(Exception):
     pass
 
 
-class DataPoint(): 
+@dataclass(frozen=True)
+class DataPoint: 
 
-    def __init__(self,
-                 pressure_Pa: float,
-                 temperature_K: float,
-                 x1_mol_frac: float,
-                 y1_mol_frac: float,
-                 x2_mol_frac: float,
-                 y2_mol_frac: float,
-                 comp1: str,
-                 comp2: str):
-        self.pressure_Pa = pressure_Pa
-        self.temperature_K = temperature_K
-        self.x1_mol_frac = x1_mol_frac
-        self.y1_mol_frac = y1_mol_frac
-        self.x2_mol_frac = x2_mol_frac
-        self.y2_mol_frac = y2_mol_frac
-        self.comp1 = comp1
-        self.comp2 = comp2
+    """
+    Represents a single Vapor-Liquid Equilibrium (VLE) experimental data point.
+    """
+    pressure_Pa: float
+    temperature_K: float
+    x1_mol_frac: float
+    y1_mol_frac: float
+    x2_mol_frac: float
+    y2_mol_frac: float
+    comp1: str
+    comp2: str
 
 
 
@@ -159,7 +156,7 @@ class VLEData():
         source = "no data source provided"
 
         # ^#\s* matches '#' followed by optional spaces
-        # (source|reference) \b matches the word, ensuring that we capture 'source' or 'reference' as whole words
+        # (source|reference) \b matches the word 'source' or 'reference' followed by a word boundary
         # [\s:]* ignores any spaces or colons immediately following the word
         # (.*) captures the rest of the line (the actual source text)
         pattern = re.compile(r"^#\s*(source|reference)\b[\s:]*(.*)", re.IGNORECASE)
@@ -167,7 +164,7 @@ class VLEData():
         with open(filepath, "r") as f:
             for line in f:
                 if pattern.match(line):
-                    source = pattern.match(line).group(2).strip()  # Extract the source text and remove leading/trailing whitespace
+                    source = pattern.match(line).group(2).strip() 
                     break
         return source
 

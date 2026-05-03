@@ -1,0 +1,209 @@
+{
+    "WilsonActivityModel": {
+        "methanol-water": {
+            "metadata": {
+                "component1_name": "methanol",
+                "component2_name": "water",
+                "component1_CAS": "67-56-1",
+                "component2_CAS": "7732-18-5",
+                "activity_model": "WilsonActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialExponentialDIPPR",
+                "goodness_of_fit": 0.9997830988206212,
+                "regression_method": "elementwise_regression",
+                "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
+                "temperature_lb_K": 338.84999999999997,
+                "temperature_ub_K": 371.54999999999995,
+                "pressure_lb_Pa": 100000.0,
+                "pressure_ub_Pa": 100000.0,
+                "date_of_entry_creation": "2026-05-03T16:52:00.631242"
+            },
+            "BIP_data": {
+                "Lambda_12": [
+                    -4679.887442012479,
+                    -9999.99999998909,
+                    976.5146928558895,
+                    -2.893916844017914
+                ],
+                "Lambda_21": [
+                    1623.0088224439305,
+                    8076.2322608407085,
+                    -344.9036330514514,
+                    1.0698207488773779
+                ]
+            }
+        },
+        "67-56-1-7732-18-5": {
+            "metadata": {
+                "component1_name": "methanol",
+                "component2_name": "water",
+                "component1_CAS": "67-56-1",
+                "component2_CAS": "7732-18-5",
+                "activity_model": "WilsonActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialExponentialDIPPR",
+                "goodness_of_fit": 0.9997830988206212,
+                "regression_method": "elementwise_regression",
+                "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
+                "temperature_lb_K": 338.84999999999997,
+                "temperature_ub_K": 371.54999999999995,
+                "pressure_lb_Pa": 100000.0,
+                "pressure_ub_Pa": 100000.0,
+                "date_of_entry_creation": "2026-05-03T16:52:00.631242"
+            },
+            "BIP_data": {
+                "Lambda_12": [
+                    -4679.887442012479,
+                    -9999.99999998909,
+                    976.5146928558895,
+                    -2.893916844017914
+                ],
+                "Lambda_21": [
+                    1623.0088224439305,
+                    8076.2322608407085,
+                    -344.9036330514514,
+                    1.0698207488773779
+                ]
+            }
+        },
+        "ammonia-water": {
+            "metadata": {
+                "component1_name": "water",
+                "component2_name": "ammonia",
+                "component1_CAS": "7732-18-5",
+                "component2_CAS": "7664-41-7",
+                "activity_model": "WilsonActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialExponentialDIPPR",
+                "goodness_of_fit": 0.998395739541844,
+                "regression_method": "elementwise_regression",
+                "VLE_data_source": "Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Description With A Modified Cubic Equation Of State, Smolen, Manley and Poling, 1991",
+                "temperature_lb_K": 293.15,
+                "temperature_ub_K": 413.15,
+                "pressure_lb_Pa": 6300.0,
+                "pressure_ub_Pa": 3099800.0,
+                "date_of_entry_creation": "2026-05-03T16:58:17.537472"
+            },
+            "BIP_data": {
+                "Lambda_12": [
+                    0.49294798047697197,
+                    0.12882131860243298,
+                    0.09833238859189072,
+                    0.0006141083865335767
+                ],
+                "Lambda_21": [
+                    -1.911181444208069,
+                    -2.1948170986017206,
+                    1.207308821477985,
+                    -0.013770113717278392
+                ]
+            }
+        },
+        "7664-41-7-7732-18-5": {
+            "metadata": {
+                "component1_name": "water",
+                "component2_name": "ammonia",
+                "component1_CAS": "7732-18-5",
+                "component2_CAS": "7664-41-7",
+                "activity_model": "WilsonActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialExponentialDIPPR",
+                "goodness_of_fit": 0.998395739541844,
+                "regression_method": "elementwise_regression",
+                "VLE_data_source": "Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Description With A Modified Cubic Equation Of State, Smolen, Manley and Poling, 1991",
+                "temperature_lb_K": 293.15,
+                "temperature_ub_K": 413.15,
+                "pressure_lb_Pa": 6300.0,
+                "pressure_ub_Pa": 3099800.0,
+                "date_of_entry_creation": "2026-05-03T16:58:17.537472"
+            },
+            "BIP_data": {
+                "Lambda_12": [
+                    0.49294798047697197,
+                    0.12882131860243298,
+                    0.09833238859189072,
+                    0.0006141083865335767
+                ],
+                "Lambda_21": [
+                    -1.911181444208069,
+                    -2.1948170986017206,
+                    1.207308821477985,
+                    -0.013770113717278392
+                ]
+            }
+        }
+    },
+    "NRTLActivityModel": {
+        "methanol-water": {
+            "metadata": {
+                "component1_name": "methanol",
+                "component2_name": "water",
+                "component1_CAS": "67-56-1",
+                "component2_CAS": "7732-18-5",
+                "activity_model": "NRTLActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialNRTL",
+                "goodness_of_fit": 0.9987646933648201,
+                "regression_method": "elementwise_regression",
+                "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
+                "temperature_lb_K": 338.84999999999997,
+                "temperature_ub_K": 371.54999999999995,
+                "pressure_lb_Pa": 100000.0,
+                "pressure_ub_Pa": 100000.0,
+                "date_of_entry_creation": "2026-05-03T16:56:58.585121"
+            },
+            "BIP_data": {
+                "tau_12": [
+                    0.6919061447199054,
+                    0.11633650481910297,
+                    0.10741017701938041,
+                    -0.002647940744136229
+                ],
+                "tau_21": [
+                    0.692576084329888,
+                    0.11630622423282697,
+                    0.10740914415797365,
+                    -0.0027038336430941926
+                ],
+                "alpha_12": 0.3,
+                "alpha_21": 0.3
+            }
+        },
+        "67-56-1-7732-18-5": {
+            "metadata": {
+                "component1_name": "methanol",
+                "component2_name": "water",
+                "component1_CAS": "67-56-1",
+                "component2_CAS": "7732-18-5",
+                "activity_model": "NRTLActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialNRTL",
+                "goodness_of_fit": 0.9987646933648201,
+                "regression_method": "elementwise_regression",
+                "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
+                "temperature_lb_K": 338.84999999999997,
+                "temperature_ub_K": 371.54999999999995,
+                "pressure_lb_Pa": 100000.0,
+                "pressure_ub_Pa": 100000.0,
+                "date_of_entry_creation": "2026-05-03T16:56:58.585121"
+            },
+            "BIP_data": {
+                "tau_12": [
+                    0.6919061447199054,
+                    0.11633650481910297,
+                    0.10741017701938041,
+                    -0.002647940744136229
+                ],
+                "tau_21": [
+                    0.692576084329888,
+                    0.11630622423282697,
+                    0.10740914415797365,
+                    -0.0027038336430941926
+                ],
+                "alpha_12": 0.3,
+                "alpha_21": 0.3
+            }
+        }
+    },
+    "UNIQUACActivityModel": {}
+}
