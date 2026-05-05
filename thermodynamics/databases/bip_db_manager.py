@@ -4,6 +4,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 
 import json 
 from datetime import datetime
+from enum import Enum
 
 from chemicals import CAS_from_any
 
@@ -12,6 +13,11 @@ from thermodynamics.activity_models_regression.optimization import PolynomialExp
 from thermodynamics.core.properties import WilsonActivityModel, NRTLActivityModel
 
 from termcolor import colored  # for colored text output
+
+
+class ActivityModel(Enum):
+    WILSON = WilsonActivityModel.__name__
+    NRTL = NRTLActivityModel.__name__
 
 
 class OverwriteAttemptError(Exception):
@@ -29,6 +35,7 @@ class BIPDatabaseManager:
         
         self.database_filepath = database_filepath
         self.data = self._load_database()
+        self.activity_model = None
         
         pass
 
@@ -37,6 +44,7 @@ class BIPDatabaseManager:
                   BIP_estimator:BinaryInteractionParametersRegression,
                   force_overwrite: bool = False) -> None:
     
+        self.activity_model = self._get_activity_model_from_estimator(BIP_estimator=BIP_estimator)
     
         pair_key_data = self._get_component_pair_key(
             component1=BIP_estimator.VLE_data.components[0], 
@@ -55,7 +63,6 @@ class BIPDatabaseManager:
         )
 
         self._check_overwrite(
-            activity_model=metadata['activity_model'],
             force_overwrite=force_overwrite,
             name_key=name_key,
             CAS_key=CAS_key
@@ -87,6 +94,15 @@ class BIPDatabaseManager:
         with open(self.database_filepath, 'r') as f:
             return json.load(f)
 
+
+    def _get_activity_model_from_estimator(
+            self,
+            BIP_estimator: BinaryInteractionParametersRegression
+        ) -> ActivityModel:
+
+        activity_model_name = BIP_estimator.activity_model_backend.__class__.__bases__[0].__name__
+        
+        return ActivityModel(activity_model_name)
 
 
     def _get_component_pair_key(self,
@@ -131,7 +147,7 @@ class BIPDatabaseManager:
             [point.pressure_Pa for point in BIP_estimator.VLE_data.raw_data.data_points]
         )
         
-        activity_model = BIP_estimator.activity_model_backend.__class__.__bases__[0].__name__
+        activity_model = self.activity_model.value
         eos_backend = BIP_estimator.eos_backend.__class__.__name__
         polynomial = BIP_estimator.polynomial.polynomial.__class__.__name__
         goodness_of_fit = BIP_estimator.goodness_of_fit
@@ -192,7 +208,7 @@ class BIPDatabaseManager:
                            BIP_estimator: BinaryInteractionParametersRegression) -> None:
         
         self._check_polynomial_compatibility(BIP_estimator=BIP_estimator)
-        self._check_model_compatibility(BIP_estimator=BIP_estimator)
+        self._check_model_compatibility()
 
         pass 
 
@@ -202,7 +218,7 @@ class BIPDatabaseManager:
         
         polynomial = BIP_estimator.polynomial.polynomial
         
-        if (isinstance(BIP_estimator.activity_model_backend, WilsonActivityModel) and
+        if (self.activity_model == ActivityModel.WILSON and
             not isinstance(polynomial, PolynomialExponentialDIPPR)
             ):
             raise PolynomialException(
@@ -212,7 +228,7 @@ class BIPDatabaseManager:
                 f"Wilson BIP parameters. "
             )
         
-        if (isinstance(BIP_estimator.activity_model_backend, NRTLActivityModel) and
+        if (self.activity_model == ActivityModel.NRTL and
             not isinstance(polynomial, PolynomialNRTL)
             ):
             raise PolynomialException(
@@ -223,62 +239,58 @@ class BIPDatabaseManager:
             )
         
     
-    def _check_model_compatibility(self,
-                                   BIP_estimator: BinaryInteractionParametersRegression) -> None:
+    def _check_model_compatibility(self) -> None:
         
-        activity_model = BIP_estimator.activity_model_backend.__class__.__bases__[0].__name__
-        if activity_model not in self.data.keys():
+        if self.activity_model.value not in self.data.keys():
             raise ValueError(
-                f" The specified activity model {activity_model} is not compatible with the existing"
-                f" database structure. \n"
+                f" The specified activity model {self.activity_model} is not compatible with the"
+                f" existing database structure. \n"
             )
 
 
     def _check_overwrite(self,
-                         activity_model: str,
                          force_overwrite: bool,
                          name_key: str,
                          CAS_key: str) -> None:
 
         overwrite_attempt = False
 
-        if name_key in self.data[activity_model]:
+        if name_key in self.data[self.activity_model.value]:
             if not force_overwrite:
                 overwrite_attempt = True
-                if not self._offer_overwrite(activity_model, name_key, CAS_key):
+                if not self._offer_overwrite(name_key, CAS_key):
                     raise OverwriteAttemptError(
                         f" An entry for the component pair {name_key} already exists under the"
-                        f" activity model {activity_model}." 
+                        f" activity model {self.activity_model.value}." 
                     )        
             
         if (not overwrite_attempt and 
-            CAS_key in self.data[activity_model]):
+            CAS_key in self.data[self.activity_model.value]):
             if not force_overwrite:
                 overwrite_attempt = True
-                if not self._offer_overwrite(activity_model, name_key, CAS_key):
+                if not self._offer_overwrite(name_key, CAS_key):
                     raise OverwriteAttemptError(
                         f" An entry for the component pair with CAS numbers {CAS_key} already exists "
-                        f" under the activity model {activity_model}."
+                        f" under the activity model {self.activity_model.value}."
                     )
 
         pass
 
 
     def _offer_overwrite(self,
-                         activity_model: str,
                          name_key: str,
                          CAS_key: str) -> bool:
         
         force_overwrite_input = input(
             f" An entry for the component pair {name_key} already exists under the"
-            f" activity model {activity_model}. \n"
+            f" activity model {self.activity_model.value}. \n"
             f" Do you want to overwrite the existing entry? (y/n): "
         )
         if force_overwrite_input.lower() == 'y':
             return True
         else:
             print(colored(
-                f" Entry for {name_key} under {activity_model} was not overwritten. ", 'yellow'
+                f" Entry for {name_key} under {self.activity_model.value} was not overwritten. ", 'yellow'
             ))
             return False
 
@@ -294,8 +306,8 @@ class BIPDatabaseManager:
             'BIP_data': BIP_data,
         }
 
-        self.data[metadata['activity_model']][name_key] = entry
-        self.data[metadata['activity_model']][CAS_key] = entry
+        self.data[self.activity_model.value][name_key] = entry
+        self.data[self.activity_model.value][CAS_key] = entry
 
         pass
 

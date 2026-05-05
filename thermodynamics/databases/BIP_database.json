@@ -10,13 +10,13 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
                 "goodness_of_fit": 0.9997830988206212,
-                "regression_method": "elementwise_regression",
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-03T16:52:00.631242"
+                "date_of_entry_creation": "2026-05-05T07:51:42.729410"
             },
             "BIP_data": {
                 "Lambda_12": [
@@ -43,13 +43,13 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
                 "goodness_of_fit": 0.9997830988206212,
-                "regression_method": "elementwise_regression",
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-03T16:52:00.631242"
+                "date_of_entry_creation": "2026-05-05T07:51:42.729410"
             },
             "BIP_data": {
                 "Lambda_12": [
@@ -76,13 +76,13 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
                 "goodness_of_fit": 0.998395739541844,
-                "regression_method": "elementwise_regression",
+                "regression_method": "Elementwise regression of each T-x-y point",
                 "VLE_data_source": "Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Description With A Modified Cubic Equation Of State, Smolen, Manley and Poling, 1991",
                 "temperature_lb_K": 293.15,
                 "temperature_ub_K": 413.15,
                 "pressure_lb_Pa": 6300.0,
                 "pressure_ub_Pa": 3099800.0,
-                "date_of_entry_creation": "2026-05-03T16:58:17.537472"
+                "date_of_entry_creation": "2026-05-05T08:07:43.841741"
             },
             "BIP_data": {
                 "Lambda_12": [
@@ -109,13 +109,13 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
                 "goodness_of_fit": 0.998395739541844,
-                "regression_method": "elementwise_regression",
+                "regression_method": "Elementwise regression of each T-x-y point",
                 "VLE_data_source": "Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Description With A Modified Cubic Equation Of State, Smolen, Manley and Poling, 1991",
                 "temperature_lb_K": 293.15,
                 "temperature_ub_K": 413.15,
                 "pressure_lb_Pa": 6300.0,
                 "pressure_ub_Pa": 3099800.0,
-                "date_of_entry_creation": "2026-05-03T16:58:17.537472"
+                "date_of_entry_creation": "2026-05-05T08:07:43.841741"
             },
             "BIP_data": {
                 "Lambda_12": [
@@ -150,7 +150,7 @@
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-05T07:02:41.816380"
+                "date_of_entry_creation": "2026-05-05T07:46:52.846907"
             },
             "BIP_data": {
                 "tau_12": [
@@ -185,7 +185,7 @@
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-05T07:02:41.816380"
+                "date_of_entry_creation": "2026-05-05T07:46:52.846907"
             },
             "BIP_data": {
                 "tau_12": [

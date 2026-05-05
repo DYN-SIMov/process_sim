@@ -17,14 +17,14 @@ def main():
 
     VLE_data = VLEData(
         filepath = 'thermodynamics/activity_models_regression/thermo_data/' \
-        'VLE_isobaric_MeOH_H2O.csv'
+        'VLE_H2O_NH3.csv'
     )
     
     BIP_estimator = BinaryInteractionParametersRegression(
-        activity_model_regression=NRTLActivityModelRegression,
+        activity_model_regression=WilsonActivityModelRegression,
         equation_of_state=SoaveRedlichKwongEoSBackend,
         VLE_data=VLE_data,
-        polynomial=PolynomialNRTL(degree=4),
+        polynomial=PolynomialExponentialDIPPR(degree=4),
         polynomial_form=AbsoluteForm
     )
 

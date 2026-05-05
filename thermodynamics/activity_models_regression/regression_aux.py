@@ -137,18 +137,15 @@ class BinaryInteractionParametersRegression():
         )
 
         BIP_coeffs = [estimation_results[k].x for k in range(len(estimation_results))]
-        self.BIP_polynomial_coeffs = [
+        BIP_polynomial_coeffs = [
             self.polynomial.get_absolute_coeffs(
                 coeffs=BIP_coeffs[k]
             ) for k in range(len(BIP_coeffs))
         ]
 
-        self.goodness_of_fit = self._calculate_goodness_of_fit()
-
-        self._cache_regression_results(
+        self._record_regression_results(
             regression_method=RegressionMethod.ELEMENTWISE,
-            BIP_polynomial_coeffs=self.BIP_polynomial_coeffs,
-            goodness_of_fit=self.goodness_of_fit
+            BIP_polynomial_coeffs=BIP_polynomial_coeffs
         )
 
         
@@ -194,7 +191,7 @@ class BinaryInteractionParametersRegression():
         results = pymoo_minimize(
             problem=problem,
             algorithm=algorithm,
-            termination=("n_gen", 30),
+            termination=("n_gen", 500),
             seed=1,
             verbose=verbose,
             callback=memetic_callback
@@ -207,17 +204,14 @@ class BinaryInteractionParametersRegression():
 
         BIP_coeffs = results.X.reshape((activity_model.number_of_BIP_parameters, 
                                         self.polynomial.degree))
-        self.BIP_polynomial_coeffs = [
+        BIP_polynomial_coeffs = [
             self.polynomial.get_absolute_coeffs(
                 coeffs=BIP_coeffs[k]
             ) for k in range(len(BIP_coeffs))]
         
-        self.goodness_of_fit = self._calculate_goodness_of_fit()
-
-        self._cache_regression_results(
+        self._record_regression_results(
             regression_method=RegressionMethod.DIRECT_VLE,
-            BIP_polynomial_coeffs=self.BIP_polynomial_coeffs,
-            goodness_of_fit=self.goodness_of_fit
+            BIP_polynomial_coeffs=BIP_polynomial_coeffs
         )
 
         pass
@@ -408,14 +402,18 @@ class BinaryInteractionParametersRegression():
         return r_value_y1**2
     
 
-    def _cache_regression_results(self,
-                                  BIP_polynomial_coeffs: list,
-                                  regression_method: RegressionMethod,
-                                  goodness_of_fit: float = None) -> None :
+    def _record_regression_results(self, 
+                                   BIP_polynomial_coeffs: list, 
+                                   regression_method: RegressionMethod) -> None :
+
+
+        self.BIP_polynomial_coeffs = BIP_polynomial_coeffs
+        self.goodness_of_fit = self._calculate_goodness_of_fit()
+        self.regression_method = regression_method
 
         self.regression_results_cache[regression_method] = {
             'BIP_polynomial_coeffs': BIP_polynomial_coeffs,
-            'goodness_of_fit': goodness_of_fit
+            'goodness_of_fit': self.goodness_of_fit
         }
 
 
