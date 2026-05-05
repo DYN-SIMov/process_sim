@@ -29,6 +29,15 @@ from data_handling import VLEData
 from optimization import PymooPolynomialEstimator
 
 from typing import Type
+from enum import Enum
+
+
+
+class RegressionMethod(Enum):
+    ELEMENTWISE = 'Elementwise regression of each T-x-y point'
+    DIRECT_VLE = 'Direct regression from VLE data using memetic algorithm'
+
+
 
 class BinaryInteractionParametersRegression(): 
 
@@ -55,7 +64,9 @@ class BinaryInteractionParametersRegression():
         )
         
         self.elementwise_opt_results: list = None
-        self.BIP_polynomial_coeffs: dict = None
+        self.regression_results_cache: dict = {}
+        self.regression_method: RegressionMethod = None
+        self.BIP_polynomial_coeffs: list = None
         self.goodness_of_fit: float = None
 
         pass
@@ -131,8 +142,15 @@ class BinaryInteractionParametersRegression():
                 coeffs=BIP_coeffs[k]
             ) for k in range(len(BIP_coeffs))
         ]
-        
-        self.calculate_goodness_of_fit()
+
+        self.goodness_of_fit = self._calculate_goodness_of_fit()
+
+        self._cache_regression_results(
+            regression_method=RegressionMethod.ELEMENTWISE,
+            BIP_polynomial_coeffs=self.BIP_polynomial_coeffs,
+            goodness_of_fit=self.goodness_of_fit
+        )
+
         
         pass
 
@@ -176,7 +194,7 @@ class BinaryInteractionParametersRegression():
         results = pymoo_minimize(
             problem=problem,
             algorithm=algorithm,
-            termination=("n_gen", 500),
+            termination=("n_gen", 30),
             seed=1,
             verbose=verbose,
             callback=memetic_callback
@@ -194,10 +212,50 @@ class BinaryInteractionParametersRegression():
                 coeffs=BIP_coeffs[k]
             ) for k in range(len(BIP_coeffs))]
         
-        self.calculate_goodness_of_fit()
+        self.goodness_of_fit = self._calculate_goodness_of_fit()
 
+        self._cache_regression_results(
+            regression_method=RegressionMethod.DIRECT_VLE,
+            BIP_polynomial_coeffs=self.BIP_polynomial_coeffs,
+            goodness_of_fit=self.goodness_of_fit
+        )
 
         pass
+
+
+    def compare_regression_methods(self) -> None:
+        
+        for method, results in self.regression_results_cache.items():
+            print(f" Regression method: {method} ")
+            print(f" BIP polynomial coefficients: {results['BIP_polynomial_coeffs']}")
+            print(f" Goodness of fit (R^2): {results['goodness_of_fit']:.4f}")
+            print("-"*50)
+
+        method_selected = input(
+            f" Select the regression method to visualize the results \n"
+            f" press [1] to select elementwise \n"
+            f" press [2] to select direct VLE: \n"
+            f" input: ")
+        
+        if method_selected == '1':
+            self.regression_method = RegressionMethod.ELEMENTWISE
+            self.BIP_polynomial_coeffs = self.regression_results_cache[
+                RegressionMethod.ELEMENTWISE]['BIP_polynomial_coeffs']
+            self.goodness_of_fit = self.regression_results_cache[
+                RegressionMethod.ELEMENTWISE]['goodness_of_fit']
+        elif method_selected == '2':
+            self.regression_method = RegressionMethod.DIRECT_VLE
+            self.BIP_polynomial_coeffs = self.regression_results_cache[
+                RegressionMethod.DIRECT_VLE]['BIP_polynomial_coeffs']
+            self.goodness_of_fit = self.regression_results_cache[
+                RegressionMethod.DIRECT_VLE]['goodness_of_fit']
+        else:
+            print(" Invalid selection. Defaulting to elementwise regression results. ")
+            self.regression_method = RegressionMethod.ELEMENTWISE
+            self.BIP_polynomial_coeffs = self.regression_results_cache[
+                RegressionMethod.ELEMENTWISE]['BIP_polynomial_coeffs']
+            self.goodness_of_fit = self.regression_results_cache[
+                RegressionMethod.ELEMENTWISE]['goodness_of_fit']
 
 
     def _estimate_y_calculated(self,
@@ -330,7 +388,7 @@ class BinaryInteractionParametersRegression():
         return sum(error_data)
 
 
-    def calculate_goodness_of_fit(self) -> None:
+    def _calculate_goodness_of_fit(self) -> None:
         """
         Calculates the goodness of fit (R^2) for the regressed model.
         """
@@ -346,7 +404,19 @@ class BinaryInteractionParametersRegression():
          r_value_y1, 
          p_value_y1, 
          std_err_y1] = linregress(y1_exp_data_plot, y1_calc_data_plot)
-        self.goodness_of_fit = r_value_y1**2
+        
+        return r_value_y1**2
+    
+
+    def _cache_regression_results(self,
+                                  BIP_polynomial_coeffs: list,
+                                  regression_method: RegressionMethod,
+                                  goodness_of_fit: float = None) -> None :
+
+        self.regression_results_cache[regression_method] = {
+            'BIP_polynomial_coeffs': BIP_polynomial_coeffs,
+            'goodness_of_fit': goodness_of_fit
+        }
 
 
     def results_visualization(self,
@@ -362,7 +432,7 @@ class BinaryInteractionParametersRegression():
         point_indices = visualization_data['point_indices']
 
         if self.goodness_of_fit is None:
-            self.calculate_goodness_of_fit()
+            self._calculate_goodness_of_fit()
 
         if get_parity_plot is True: 
             plt.figure(figsize=(6,6))
@@ -422,6 +492,7 @@ class BinaryInteractionParametersRegression():
             pass 
         
         input("Press any key to exit the visualization...")
+        plt.close('all')
 
         pass
 

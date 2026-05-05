@@ -38,16 +38,16 @@ class BIPDatabaseManager:
                   force_overwrite: bool = False) -> None:
     
     
-        metadata = self._extract_metadata(
-            BIP_estimator=BIP_estimator
-        )
-
         pair_key_data = self._get_component_pair_key(
             component1=BIP_estimator.VLE_data.components[0], 
             component2=BIP_estimator.VLE_data.components[1]
         )
         name_key = pair_key_data['components']
         CAS_key = pair_key_data['CAS_numbers']
+
+        metadata = self._extract_metadata(
+            BIP_estimator=BIP_estimator
+        )
 
         BIP_data = self._extract_BIP_data(
             BIP_estimator=BIP_estimator,
@@ -135,11 +135,7 @@ class BIPDatabaseManager:
         eos_backend = BIP_estimator.eos_backend.__class__.__name__
         polynomial = BIP_estimator.polynomial.polynomial.__class__.__name__
         goodness_of_fit = BIP_estimator.goodness_of_fit
-
-        if BIP_estimator.elementwise_opt_results is not None: 
-            regression_method = 'elementwise_regression'
-        else: 
-            regression_method = 'direct_regression_from_VLE_data'
+        regression_method = BIP_estimator.regression_method.value
 
         return {
             'component1_name': component1,

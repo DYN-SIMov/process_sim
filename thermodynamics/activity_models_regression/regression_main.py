@@ -17,7 +17,7 @@ def main():
 
     VLE_data = VLEData(
         filepath = 'thermodynamics/activity_models_regression/thermo_data/' \
-        'VLE_H2O_NH3.csv'
+        'VLE_isobaric_MeOH_H2O.csv'
     )
     
     BIP_estimator = BinaryInteractionParametersRegression(
@@ -40,6 +40,7 @@ def main():
         BIP_estimator.estimate_polynomial_from_VLE_data(n_jobs=4, is_memetic=True, verbose=True)
         BIP_estimator.results_visualization(get_parity_plot=True,
                                             get_VLE_curve=True)
+        BIP_estimator.compare_regression_methods()
 
 
     save_resuls = input(" Do you want to save the regression results to the database? (y/n): ")
@@ -53,4 +54,8 @@ def main():
 if __name__ == "__main__": 
     main()
 
-
+"""
+TODO: 
+1) check the water-ammonia issue with NRTL
+2) improve NRTL model regression for varying alpha
+"""
