@@ -28,15 +28,25 @@ from data_handling import VLEData
 
 from optimization import PymooPolynomialEstimator
 
+from typing import Type
+from enum import Enum
+
+
+
+class RegressionMethod(Enum):
+    ELEMENTWISE = 'Elementwise regression of each T-x-y point'
+    DIRECT_VLE = 'Direct regression from VLE data using memetic algorithm'
+
+
 
 class BinaryInteractionParametersRegression(): 
 
     def __init__(self,
-                 activity_model_regression: ActivityModelRegressionInterface = None,
-                 equation_of_state: EquationOfStateInterface = None,
+                 activity_model_regression: Type[ActivityModelRegressionInterface] = None,
+                 equation_of_state: Type[EquationOfStateInterface] = None,
                  VLE_data: VLEData = None,
                  polynomial: PolynomialExponentialDIPPR = None,
-                 polynomial_form: PolynominalFormInterface = AbsoluteForm) -> None: 
+                 polynomial_form: Type[PolynominalFormInterface] = AbsoluteForm) -> None: 
 
         self.VLE_data = VLE_data
         self.polynomial = polynomial_form(polynomial) if polynomial is not None else None
@@ -47,14 +57,17 @@ class BinaryInteractionParametersRegression():
         self.eos_backend = equation_of_state(
             components=self.VLE_data.components,
             pure_component_data_backend=pure_component_data_backend
-        )
+        ) if equation_of_state is not None else None
         self.activity_model_backend = activity_model_regression(
             components=self.VLE_data.components,
             pure_component_data_backend=pure_component_data_backend
         )
         
         self.elementwise_opt_results: list = None
-        self.BIP_polynomial_coeffs: dict = None
+        self.regression_results_cache: dict = {}
+        self.regression_method: RegressionMethod = None
+        self.BIP_polynomial_coeffs: list = None
+        self.goodness_of_fit: float = None
 
         pass
         
@@ -104,7 +117,7 @@ class BinaryInteractionParametersRegression():
     def estimate_polynomial_from_elementwise_optimisation(self) -> None:
 
         " Method for regressing DIPPR polynomial parameters based on results of elementwise "
-        " regression of Wilson Binary Interaction Parameters"
+        " regression of Binary Interaction Parameters"
         
         if self.elementwise_opt_results is None:
             raise ValueError(" Elementwise optimisation results not found. "
@@ -124,11 +137,17 @@ class BinaryInteractionParametersRegression():
         )
 
         BIP_coeffs = [estimation_results[k].x for k in range(len(estimation_results))]
-        self.BIP_polynomial_coeffs = [
+        BIP_polynomial_coeffs = [
             self.polynomial.get_absolute_coeffs(
                 coeffs=BIP_coeffs[k]
             ) for k in range(len(BIP_coeffs))
         ]
+
+        self._record_regression_results(
+            regression_method=RegressionMethod.ELEMENTWISE,
+            BIP_polynomial_coeffs=BIP_polynomial_coeffs
+        )
+
         
         pass
 
@@ -185,14 +204,100 @@ class BinaryInteractionParametersRegression():
 
         BIP_coeffs = results.X.reshape((activity_model.number_of_BIP_parameters, 
                                         self.polynomial.degree))
-        self.BIP_polynomial_coeffs = [
+        BIP_polynomial_coeffs = [
             self.polynomial.get_absolute_coeffs(
                 coeffs=BIP_coeffs[k]
-            ) for k in range(len(BIP_coeffs))
-        ]
-
+            ) for k in range(len(BIP_coeffs))]
+        
+        self._record_regression_results(
+            regression_method=RegressionMethod.DIRECT_VLE,
+            BIP_polynomial_coeffs=BIP_polynomial_coeffs
+        )
 
         pass
+
+
+    def compare_regression_methods(self) -> None:
+        
+        for method, results in self.regression_results_cache.items():
+            print(f" Regression method: {method.value} ")
+            print(f" BIP polynomial coefficients: {results['BIP_polynomial_coeffs']}")
+            print(f" Goodness of fit (R^2): {results['goodness_of_fit']:.4f}")
+            print("-"*50)
+
+        method_selected = input(
+            f" Select the regression method to visualize the results \n"
+            f" press [1] to select elementwise \n"
+            f" press [2] to select direct VLE: \n"
+            f" input: ")
+        
+        if method_selected == '1':
+            self.regression_method = RegressionMethod.ELEMENTWISE
+            self.BIP_polynomial_coeffs = self.regression_results_cache[
+                RegressionMethod.ELEMENTWISE]['BIP_polynomial_coeffs']
+            self.goodness_of_fit = self.regression_results_cache[
+                RegressionMethod.ELEMENTWISE]['goodness_of_fit']
+        elif method_selected == '2':
+            self.regression_method = RegressionMethod.DIRECT_VLE
+            self.BIP_polynomial_coeffs = self.regression_results_cache[
+                RegressionMethod.DIRECT_VLE]['BIP_polynomial_coeffs']
+            self.goodness_of_fit = self.regression_results_cache[
+                RegressionMethod.DIRECT_VLE]['goodness_of_fit']
+        else:
+            print(" Invalid selection. Defaulting to elementwise regression results. ")
+            self.regression_method = RegressionMethod.ELEMENTWISE
+            self.BIP_polynomial_coeffs = self.regression_results_cache[
+                RegressionMethod.ELEMENTWISE]['BIP_polynomial_coeffs']
+            self.goodness_of_fit = self.regression_results_cache[
+                RegressionMethod.ELEMENTWISE]['goodness_of_fit']
+
+
+    def _estimate_y_calculated(self,
+                               x1_val:float,
+                               y1_val:float,
+                               pressure_Pa:float,
+                               temperature_K:float,
+                               saturation_pressure_Pa_1:float,
+                               saturation_pressure_Pa_2:float,
+                               BIP_coeffs:np.ndarray) -> dict: 
+
+        x2_val = 1 - x1_val
+        y2_val = 1 - y1_val
+        
+        gamma_1_calc, gamma_2_calc = self.activity_model_backend.get_activity_coefs(
+            theta = BIP_coeffs,
+            x_val = x1_val
+        )
+
+        if self.eos_backend is not None:
+            fugacity_coef_1, fugacity_coef_2  = self.eos_backend.get_fugacity_coefs(
+                temperature_K = temperature_K,
+                pressure_Pa = pressure_Pa,
+                molar_composition = np.array([y1_val, y2_val])) 
+        else: 
+            # ideal gas assumption if no EoS backend is specified
+            fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   
+
+        # based on the modified Raoult's law: y_i * fi_i * P_total = x_i * gamma_i * P_sat_i 
+        pressure_total_Pa_calc = (
+            (x1_val * gamma_1_calc * saturation_pressure_Pa_1) / fugacity_coef_1 + 
+            (x2_val * gamma_2_calc * saturation_pressure_Pa_2) / fugacity_coef_2
+        )
+        
+        y_calc_val_1 = (
+            x1_val * gamma_1_calc * saturation_pressure_Pa_1 / 
+            (pressure_total_Pa_calc * fugacity_coef_1)
+        )
+        y_calc_val_2 = (
+            x2_val * gamma_2_calc * saturation_pressure_Pa_2 / 
+            (pressure_total_Pa_calc * fugacity_coef_2)
+        )
+        
+        return {
+            'y_calc_val_1': y_calc_val_1,
+            'y_calc_val_2': y_calc_val_2,
+            'pressure_total_Pa_calc': pressure_total_Pa_calc
+        }
 
 
     def _objective_function_elementwise(self, 
@@ -213,37 +318,31 @@ class BinaryInteractionParametersRegression():
 
         error_data = []
         for k in range(len(x_exp_data)):
-            x_exp_val = x_exp_data[k]
-            y_exp_val = y_exp_data[k]
-            pressure_Pa = pressure_Pa_data[k]
-            gamma_1_calc, gamma_2_calc = self.activity_model_backend.get_activity_coefs(
-                theta=theta,
-                x_val = x_exp_val
+
+            x1_exp_val = x_exp_data[k]
+            y1_exp_val = y_exp_data[k]
+            x2_exp_val = 1 - x1_exp_val
+            y2_exp_val = 1 - y1_exp_val
+
+            output = self._estimate_y_calculated(
+                x1_val = x1_exp_val,
+                y1_val = y1_exp_val,
+                pressure_Pa = pressure_Pa_data[k],
+                temperature_K = temperature_K,
+                saturation_pressure_Pa_1 = saturation_pressure_Pa_1,
+                saturation_pressure_Pa_2 = saturation_pressure_Pa_2,
+                BIP_coeffs = theta
             )
 
-            if self.eos_backend is not None:
-                fugacity_coef_1, fugacity_coef_2  = self.eos_backend.get_fugacity_coefs(
-                    temperature_K = temperature_K,
-                    pressure_Pa = pressure_Pa,
-                    molar_composition = np.array([y_exp_val, 1 - y_exp_val])) 
-            else: 
-                # ideal gas assumption if no EoS backend is specified
-                fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   
-
-
-            # based on the modified Raoult's law: y_i * fi_i * P_total= x_i * gamma_i * P_sat_i 
-            y_calc_val_1 = x_exp_val * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
-            y_calc_val_2 = (1 - x_exp_val) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
-            
-            pressure_total_Pa_calc = ((x_exp_val * gamma_1_calc * saturation_pressure_Pa_1) / (y_calc_val_1 * fugacity_coef_1) + 
-                                        ((1 - x_exp_val) * gamma_2_calc * saturation_pressure_Pa_2) / (y_calc_val_2 * fugacity_coef_2))/2
-
-            y_exp_val_1  = y_exp_val
-            y_exp_val_2  = 1 - y_exp_val
-
-            error = ((y_exp_val_1 - y_calc_val_1)**2 + 
-                     (y_exp_val_2 - y_calc_val_2)**2 + 
-                     ((pressure_Pa - pressure_total_Pa_calc)/pressure_Pa)**2)
+            y1_calc_val = output['y_calc_val_1']
+            y2_calc_val = output['y_calc_val_2']
+            pressure_total_Pa_calc = output['pressure_total_Pa_calc']
+    
+            error = (
+                ((y1_exp_val - y1_calc_val)/y1_exp_val)**2 + 
+                ((y2_exp_val - y2_calc_val)/y2_exp_val)**2 + 
+                ((pressure_Pa_data[k] - pressure_total_Pa_calc)/pressure_Pa_data[k])**2
+            )
             error_data.append(error)
 
         return sum(error_data)
@@ -283,80 +382,67 @@ class BinaryInteractionParametersRegression():
         return sum(error_data)
 
 
+    def _calculate_goodness_of_fit(self) -> None:
+        """
+        Calculates the goodness of fit (R^2) for the regressed model.
+        """
+        if self.BIP_polynomial_coeffs is None:
+            return
+        
+        visualization_data = self._extract_visualization_data()
+        y1_exp_data_plot = visualization_data['y1_exp_data']
+        y1_calc_data_plot = visualization_data['y1_calc_data']
+        
+        [slope_y1, 
+         intercept_y1, 
+         r_value_y1, 
+         p_value_y1, 
+         std_err_y1] = linregress(y1_exp_data_plot, y1_calc_data_plot)
+        
+        return r_value_y1**2
+    
+
+    def _record_regression_results(self, 
+                                   BIP_polynomial_coeffs: list, 
+                                   regression_method: RegressionMethod) -> None :
+
+
+        self.BIP_polynomial_coeffs = BIP_polynomial_coeffs
+        self.goodness_of_fit = self._calculate_goodness_of_fit()
+        self.regression_method = regression_method
+
+        self.regression_results_cache[regression_method] = {
+            'BIP_polynomial_coeffs': BIP_polynomial_coeffs,
+            'goodness_of_fit': self.goodness_of_fit
+        }
+
+
     def results_visualization(self,
                               get_parity_plot,
                               get_VLE_curve) -> None:
         
-        temperature_K_data = []
-        pressure_Pa_data = []
-        x1_exp_data = []
-        y1_exp_data = []
-        saturation_pressure_Pa_1_data = []
-        saturation_pressure_Pa_2_data = []
+        visualization_data = self._extract_visualization_data()
+        y1_exp_data_plot = visualization_data['y1_exp_data']
+        y1_calc_data_plot = visualization_data['y1_calc_data']
+        x1_exp_data_plot = visualization_data['x1_exp_data']
+        y1_calc_elementwise_data_plot = visualization_data['y1_calc_elementwise_data']
+        y2_calc_elementwise_data_plot = visualization_data['y2_calc_elementwise_data']
+        point_indices = visualization_data['point_indices']
 
-        for T_x_y_point in self.VLE_data.T_x_y_points:
-            x1_exp_data.extend([datum.x1_mol_frac for datum in T_x_y_point.data])
-            y1_exp_data.extend([datum.y1_mol_frac for datum in T_x_y_point.data])
-            pressure_Pa_data.extend([datum.pressure_Pa for datum in T_x_y_point.data])
-            temperature_K_data.extend([T_x_y_point.temperature_K] * len(T_x_y_point.data))
-            saturation_pressure_Pa_1_data.extend([T_x_y_point.comp_1_saturation_pressure_Pa] * len(T_x_y_point.data))
-            saturation_pressure_Pa_2_data.extend([T_x_y_point.comp_2_saturation_pressure_Pa] * len(T_x_y_point.data))
-
-        x1_exp_data_plot        = []
-        y1_exp_data_plot        = []
-        x2_exp_data_plot        = []
-        y2_exp_data_plot        = []
-        y1_calc_data_plot       = []
-        y2_calc_data_plot       = []
-        temperature_K_data_plot = []
-
-        for k in range(len(x1_exp_data)):
-
-            temperature_K = temperature_K_data[k]
-            pressure_Pa = pressure_Pa_data[k]
-            x1_exp = x1_exp_data[k] 
-            y1_exp = y1_exp_data[k]
-            saturation_pressure_Pa_1 = saturation_pressure_Pa_1_data[k]
-            saturation_pressure_Pa_2 = saturation_pressure_Pa_2_data[k]
-
-            BIP_values = []
-            for k in range(0, len(self.BIP_polynomial_coeffs)):
-                BIP_val = self.polynomial.evaluate(temperature_K = temperature_K,
-                                                   coeffs = self.BIP_polynomial_coeffs[k])
-                BIP_values.append(BIP_val)
-
-            gamma_1_calc, gamma_2_calc = self.activity_model_backend.get_activity_coefs(theta=BIP_values,
-                                                                                        x_val=x1_exp)
-
-            if self.eos_backend is not None:
-                fugacity_coef_1, fugacity_coef_2  = self.eos_backend.get_fugacity_coefs(temperature_K = temperature_K,
-                                                                                            pressure_Pa = pressure_Pa,
-                                                                                            molar_composition = np.array([y1_exp, 1 - y1_exp])) 
-            else: 
-                fugacity_coef_1, fugacity_coef_2  = np.array([1.0, 1.0])   # ideal gas assumption if no EoS backend is specified
-
-
-            y1_calc = x1_exp * gamma_1_calc * saturation_pressure_Pa_1 / (pressure_Pa * fugacity_coef_1)
-            y2_calc = (1 - x1_exp) * gamma_2_calc * saturation_pressure_Pa_2 / (pressure_Pa * fugacity_coef_2)
-
-            x1_exp_data_plot.append(x1_exp)
-            y1_exp_data_plot.append(y1_exp)
-            x2_exp_data_plot.append(x1_exp)
-            y2_exp_data_plot.append(y1_exp)
-            y1_calc_data_plot.append(y1_calc)
-            y2_calc_data_plot.append(y2_calc)
-
-        # Estimating R2 coefficients  
-        slope_y1, intercept_y1, r_value_y1, p_value_y1, std_err_y1 = linregress(y1_exp_data_plot, y1_calc_data_plot)
+        if self.goodness_of_fit is None:
+            self._calculate_goodness_of_fit()
 
         if get_parity_plot is True: 
             plt.figure(figsize=(6,6))
-            plt.scatter(y1_exp_data_plot, y1_calc_data_plot, color='red', label=f'y_{self.VLE_data.components[0]}')
+            plt.scatter(y1_exp_data_plot, y1_calc_data_plot, 
+                        color='red', label=f'y_{self.VLE_data.components[0]}'
+            )
             plt.plot([0, 1], [0, 1], 'k--', label='reference line')
             plt.xlabel(f'Experimental y_{self.VLE_data.components[0]}')
             plt.ylabel(f'Calculated y_{self.VLE_data.components[0]}')
-            plt.title(f'Parity Plot for VLE of {self.VLE_data.components[0]} and {self.VLE_data.components[1]} \n'
-                      f'R2 {self.VLE_data.components[0]} =  {r_value_y1**2:.3f}')   
+            plt.title(f'Parity Plot for VLE of {self.VLE_data.components[0]} and '
+                      f'{self.VLE_data.components[1]} \n'
+                      f'R2 {self.VLE_data.components[0]} =  {self.goodness_of_fit:.3f}')   
             plt.xlim(0, 1)
             plt.ylim(0, 1)
             plt.legend()
@@ -364,8 +450,34 @@ class BinaryInteractionParametersRegression():
 
         if get_VLE_curve is True: 
             plt.figure(figsize=(6,6))
-            plt.scatter(x1_exp_data_plot, y1_exp_data_plot, color='red', label=f'exp data for {self.VLE_data.components[0]}')
-            plt.plot(x1_exp_data_plot, y1_calc_data_plot, color='blue', label=f'calc data for {self.VLE_data.components[0]}')
+            plt.scatter(x1_exp_data_plot, y1_exp_data_plot, 
+                        color='red', label=f'exp data for {self.VLE_data.components[0]}'
+            )
+            
+            # ----------------------------------------------------------------------------
+            # Filtering out datapoints belonging to different T-x-y curves (diffent pressures)
+            # ----------------------------------------------------------------------------
+            unique_indices = sorted(list(set(point_indices)))
+            if len(unique_indices) == len(point_indices):
+                x_curve = x1_exp_data_plot
+                y_calc_curve = y1_calc_data_plot
+                label = f'calc data for {self.VLE_data.components[0]}'
+                plt.plot(x_curve, y_calc_curve, color='blue', label=label)
+            else: 
+                for i, p_idx in enumerate(unique_indices):
+                    idx_mask = [k for k, val in enumerate(point_indices) if val == p_idx]
+                    x_curve = [x1_exp_data_plot[k] for k in idx_mask]
+                    y_calc_curve = [y1_calc_data_plot[k] for k in idx_mask]
+                    
+                    label = f'calc data for {self.VLE_data.components[0]}' if i == 0 else "_nolegend_"
+                    plt.plot(x_curve, y_calc_curve, color='blue', label=label)
+
+            if self.elementwise_opt_results is not None: 
+                plt.scatter(x1_exp_data_plot, y1_calc_elementwise_data_plot, 
+                            color='green', 
+                            marker='x',
+                            label=f'elementwise regression results for {self.VLE_data.components[0]}'
+                )
             plt.plot([0, 1], [0, 1], 'k--', label='y=x')
             plt.xlabel(f'x_{self.VLE_data.components[0]}')
             plt.ylabel(f'y_{self.VLE_data.components[0]}')
@@ -377,8 +489,137 @@ class BinaryInteractionParametersRegression():
 
             pass 
         
-        input("Press Enter to continue...")
+        input("Press any key to exit the visualization...")
+        plt.close('all')
 
         pass
 
 
+    def _extract_visualization_data(self) -> dict: 
+
+        """
+        Method for extracting the data for visualization of regression results.
+
+        Args: 
+            None
+        Returns:
+            dict: A dictionary containing the data for visualization, including:
+                - x1_exp_data: A list of experimental x1 mol fraction data points.
+                - y1_exp_data: A list of experimental y1 mol fraction data points.
+                - x2_exp_data: A list of experimental x2 mol fraction data points.
+                - y2_exp_data: A list of experimental y2 mol fraction data points.
+                - y1_calc_data: A list of calculated y1 mol fraction data points based on 
+                    the regressed BIP polynomial.
+                - y2_calc_data: A list of calculated y2 mol fraction data points based on 
+                    the regressed BIP polynomial.
+                - y1_calc_elementwise_data: A list of calculated y1 mol fraction data points
+                    based on the elementwise regression of BIP parameters.
+                - y2_calc_elementwise_data: A list of calculated y2 mol fraction data points
+                    based on the elementwise regression of BIP parameters.
+                - point_indices: A list of indices corresponding to each data point, indicating
+                    which temperature point (i.e., T_x_y_point) it belongs to. This is useful for 
+                    keeping track when there are several data points for each T-x-y point. 
+                    This variable is also used for visualization of VLE curves, 
+                    where the data points from the same T-x-y point are connected with a line.
+        """
+
+        temperature_K_data = []
+        pressure_Pa_data = []
+        x1_exp_data = []
+        y1_exp_data = []
+        saturation_pressure_Pa_1_data = []
+        saturation_pressure_Pa_2_data = []
+        point_indices = [] 
+
+        for pt_idx, T_x_y_point in enumerate(self.VLE_data.T_x_y_points):
+            x1_exp_data.extend([datum.x1_mol_frac for datum in T_x_y_point.data])
+            y1_exp_data.extend([datum.y1_mol_frac for datum in T_x_y_point.data])
+            pressure_Pa_data.extend([datum.pressure_Pa for datum in T_x_y_point.data])
+            temperature_K_data.extend([T_x_y_point.temperature_K] * len(T_x_y_point.data))
+            saturation_pressure_Pa_1_data.extend(
+                [T_x_y_point.comp_1_saturation_pressure_Pa] * len(T_x_y_point.data)
+            )
+            saturation_pressure_Pa_2_data.extend(
+                [T_x_y_point.comp_2_saturation_pressure_Pa] * len(T_x_y_point.data)
+            )
+            point_indices.extend([pt_idx] * len(T_x_y_point.data))
+
+        x1_exp_data_plot        = []
+        y1_exp_data_plot        = []
+
+        x2_exp_data_plot        = []
+        y2_exp_data_plot        = []
+        
+        y1_calc_data_plot       = []
+        y2_calc_data_plot       = []
+        
+        y1_calc_elementwise_data_plot = []
+        y2_calc_elementwise_data_plot = []
+
+        for k in range(len(x1_exp_data)):
+
+            temperature_K = temperature_K_data[k]
+            pressure_Pa = pressure_Pa_data[k]
+            x1_exp = x1_exp_data[k] 
+            y1_exp = y1_exp_data[k]
+            saturation_pressure_Pa_1 = saturation_pressure_Pa_1_data[k]
+            saturation_pressure_Pa_2 = saturation_pressure_Pa_2_data[k]
+
+            BIP_values = []
+            for j in range(0, len(self.BIP_polynomial_coeffs)):
+                BIP_val = self.polynomial.evaluate(temperature_K = temperature_K,
+                                                   coeffs = self.BIP_polynomial_coeffs[j])
+                BIP_values.append(BIP_val)
+
+            output = self._estimate_y_calculated(
+                x1_val = x1_exp,
+                y1_val = y1_exp,
+                pressure_Pa = pressure_Pa,
+                temperature_K = temperature_K,
+                saturation_pressure_Pa_1 = saturation_pressure_Pa_1,
+                saturation_pressure_Pa_2 = saturation_pressure_Pa_2,
+                BIP_coeffs = BIP_values
+            )
+
+            x1_exp_data_plot.append(x1_exp)
+            y1_exp_data_plot.append(y1_exp)
+
+            x2_exp_data_plot.append(x1_exp)
+            y2_exp_data_plot.append(y1_exp)
+
+            y1_calc_data_plot.append(output['y_calc_val_1'])
+            y2_calc_data_plot.append(output['y_calc_val_2'])
+
+            if self.elementwise_opt_results is not None:
+                pt_idx = point_indices[k]
+                BIP_elementwise_values = self.elementwise_opt_results[pt_idx]
+                output_elementwise = self._estimate_y_calculated(
+                    x1_val = x1_exp,
+                    y1_val = y1_exp,
+                    pressure_Pa = pressure_Pa,
+                    temperature_K = temperature_K,
+                    saturation_pressure_Pa_1 = saturation_pressure_Pa_1,
+                    saturation_pressure_Pa_2 = saturation_pressure_Pa_2,
+                    BIP_coeffs = BIP_elementwise_values
+                )
+                y1_calc_elementwise_data_plot.append(output_elementwise['y_calc_val_1'])
+                y2_calc_elementwise_data_plot.append(output_elementwise['y_calc_val_2'])
+
+                pass
+
+        return {
+            'x1_exp_data': x1_exp_data_plot,
+            'y1_exp_data': y1_exp_data_plot,
+            'x2_exp_data': x2_exp_data_plot,
+            'y2_exp_data': y2_exp_data_plot,
+            'y1_calc_data': y1_calc_data_plot,
+            'y2_calc_data': y2_calc_data_plot,
+            'y1_calc_elementwise_data': y1_calc_elementwise_data_plot,
+            'y2_calc_elementwise_data': y2_calc_elementwise_data_plot,
+            'point_indices': point_indices
+        }
+
+
+
+
+    

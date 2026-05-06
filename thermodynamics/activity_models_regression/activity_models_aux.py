@@ -10,7 +10,13 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 from thermodynamics.core.properties import WilsonActivityModel, NRTLActivityModel
 
 
+
 class ActivityModelRegressionInterface(Protocol):
+
+    @classmethod
+    def get_BIP_names(cls) -> list[str]:
+        pass
+
     @staticmethod
     def get_activity_coefs(*args, **kwargs) -> np.ndarray:
         pass
@@ -37,14 +43,18 @@ class ActivityModelRegressionInterface(Protocol):
 
 class WilsonActivityModelRegression(WilsonActivityModel):
     
-    number_of_BIP_parameters:int = 2
+    @classmethod
+    def get_BIP_names(cls) -> list[str]:
+        return ['Lambda_12', 'Lambda_21']
+
 
     def __init__(self,
                  components,
                  pure_component_data_backend):
         super().__init__(components=components,
                          pure_component_data_backend=pure_component_data_backend)
-        pass
+        
+        self.number_of_BIP_parameters:int = 2
 
 
     @staticmethod
@@ -71,7 +81,7 @@ class WilsonActivityModelRegression(WilsonActivityModel):
                         -np.log(x_2 + lambda_21 * x_1) -
                         x_1 * lambda_12 / (x_1 + lambda_12 * x_2) +
                         x_1 * lambda_21 / (x_2 + lambda_21 * x_1)
-                    )
+        )
 
         gamma_1 = np.exp(ln_gamma_1)
         gamma_2 = np.exp(ln_gamma_2)
@@ -184,21 +194,27 @@ class WilsonActivityModelRegression(WilsonActivityModel):
 
 class NRTLActivityModelRegression(NRTLActivityModel): 
 
-    alpha_is_fixed:bool = True
-    alpha:float = 0.3 
+    @classmethod
+    def get_BIP_names(cls) -> list[str]:
+        return ['tau_12', 'tau_21', 'alpha_12', 'alpha_21']
 
-    number_of_BIP_parameters:int = 2 if alpha_is_fixed else 4
 
     def __init__(self,
                  components,
-                 pure_component_data_backend):
+                 pure_component_data_backend,
+                 alpha_is_fixed:bool = True,
+                 alpha:float = 0.3):
         super().__init__(components=components,
                          pure_component_data_backend=pure_component_data_backend)
+        
+        self.alpha_is_fixed = alpha_is_fixed
+        self.alpha = alpha
+        self.number_of_BIP_parameters:int = 2 if alpha_is_fixed else 4
         pass
 
 
-    @staticmethod
-    def get_activity_coefs(theta: np.ndarray,
+    def get_activity_coefs(self, 
+                           theta: np.ndarray,
                            x_val: np.ndarray) -> np.ndarray:
 
         """
@@ -208,9 +224,9 @@ class NRTLActivityModelRegression(NRTLActivityModel):
         tau_12 = theta[0]
         tau_21 = theta[1]
 
-        if NRTLActivityModelRegression.alpha_is_fixed:
-            alpha_12 = NRTLActivityModelRegression.alpha
-            alpha_21 = NRTLActivityModelRegression.alpha
+        if self.alpha_is_fixed:
+            alpha_12 = self.alpha
+            alpha_21 = self.alpha
         else:
             alpha_12 = theta[2]
             alpha_21 = theta[3]
@@ -232,15 +248,15 @@ class NRTLActivityModelRegression(NRTLActivityModel):
         return gamma_1, gamma_2
 
 
-    @staticmethod
-    def initial_guess_elementwise(initial_guess) -> np.ndarray:
+    def initial_guess_elementwise(self,
+                                  initial_guess) -> np.ndarray:
         
         """
         Method to specify initial guess input for the elementwise estimation of NRTL BIPs
         """
 
         if initial_guess is None:
-            if NRTLActivityModelRegression.alpha_is_fixed:
+            if self.alpha_is_fixed:
                 return np.array([1.0, 1.0])
             else:
                 return np.array([1.0, 1.0, 0.3, 0.3])
@@ -248,8 +264,7 @@ class NRTLActivityModelRegression(NRTLActivityModel):
             return initial_guess
         
 
-    @staticmethod
-    def get_bounds_elementwise() -> tuple:
+    def get_bounds_elementwise(self) -> tuple:
 
         """
         Method to get bounds for elementwise estimation of NRTL BIP
@@ -258,7 +273,7 @@ class NRTLActivityModelRegression(NRTLActivityModel):
         tau_12_bounds = (1e-3, None)
         tau_21_bounds = (1e-3, None)
         
-        if NRTLActivityModelRegression.alpha_is_fixed:
+        if self.alpha_is_fixed:
             bounds = (tau_12_bounds, tau_21_bounds)
         else:
             alpha_12_bounds = (1e-3, None)
@@ -268,8 +283,8 @@ class NRTLActivityModelRegression(NRTLActivityModel):
         return bounds
     
     
-    @staticmethod
-    def get_message_elementwise(regression_params: dict,
+    def get_message_elementwise(self,
+                                regression_params: dict,
                                 components: list[str],
                                 result) -> None:
         
@@ -294,7 +309,7 @@ class NRTLActivityModelRegression(NRTLActivityModel):
             else:
                 raise ValueError(" Either pressure of component data array is empty. ")
 
-            if NRTLActivityModelRegression.alpha_is_fixed:
+            if self.alpha_is_fixed:
                 msg = (f"T = {temperature_K:.2f} K, " + 
                     press_msg + 
                     comp_msg + "\n" +
@@ -320,10 +335,9 @@ class NRTLActivityModelRegression(NRTLActivityModel):
         print(msg)
 
     
-    @staticmethod
-    def get_polynomial_coeffs_estimation_message(estimation_results: list) -> None:
+    def get_polynomial_coeffs_estimation_message(self, estimation_results: list) -> None:
         
-        if NRTLActivityModelRegression.alpha_is_fixed:
+        if self.alpha_is_fixed:
             msg = (
                 f"\n Polynomial regression of NRTL BIP parameters converged successfully. \n"
                 f" Fitted coefficients for tau_12: A = {estimation_results[0].x[0]:.4f}, "
@@ -344,11 +358,10 @@ class NRTLActivityModelRegression(NRTLActivityModel):
         pass
 
 
-    @staticmethod
-    def get_message_estimation_from_VLE(coeffs: list,
+    def get_message_estimation_from_VLE(self, coeffs: list,
                                         total_residual: float) -> None:
         
-        if NRTLActivityModelRegression.alpha_is_fixed:
+        if self.alpha_is_fixed:
             msg = (
                 f"\n Polynomial regression of NRTL BIP parameters converged successfully. \n"
                 f" Fitted coefficients for tau_12: A = {coeffs[0]:.4f}, "
@@ -365,3 +378,4 @@ class NRTLActivityModelRegression(NRTLActivityModel):
         print(colored(msg, 'green'))
 
         pass
+

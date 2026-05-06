@@ -38,6 +38,11 @@ class LocalOptimizationError(RuntimeError):
 class PolynomialInterface(Protocol): 
     """ Protocol for polynomial forms to be used in the regression of BIP parameters. """
     
+    def __init__(self,
+                 degree: int):
+        self.degree = degree
+        self.equation_str = None
+
     def evaluate(self,
                  temperature_K: np.ndarray,
                  coeffs: np.ndarray) -> np.ndarray:
@@ -175,7 +180,7 @@ class NormalizedForm(PolynominalFormInterface):
 
 
 
-class PolynomialExponentialDIPPR(): 
+class PolynomialExponentialDIPPR(PolynomialInterface): 
 
     " 4 parameter DIPPR-style polynomial for BIP: "
     " Lambda_ij = exp(A + B/T + C*ln(T) + D*T). "
@@ -185,6 +190,7 @@ class PolynomialExponentialDIPPR():
     def __init__(self,
                  degree: int):
         self.degree = degree
+        self.equation_str = 'BIP = exp(A + B/T + C*ln(T) + D*T)'
         pass
 
 
@@ -230,7 +236,7 @@ class PolynomialExponentialDIPPR():
     
 
 
-class PolynomialNRTL(): 
+class PolynomialNRTL(PolynomialInterface): 
 
     " 4 parameter polynominal for NRTL model: "
     " Lambda_ij = exp(A + B/T + C*ln(T) + D*T). "
@@ -240,6 +246,7 @@ class PolynomialNRTL():
     def __init__(self,
                  degree: int):
         self.degree = degree
+        self.equation_str = 'BIP = A + B/T + C*ln(T) + D*T'
         pass
 
 
@@ -283,7 +290,7 @@ class PolynomialNRTL():
 
 
 
-class PolynomialRegular(): 
+class PolynomialRegular(PolynomialInterface): 
     
     " Regular polynomial for BIP: "
     " Lambda_ij = A + B*T + C*T^2 + D*T^3. "
@@ -291,6 +298,7 @@ class PolynomialRegular():
     def __init__(self,
                  degree: int):
         self.degree = degree
+        self.equation_str = 'BIP = A + B*T + C*T^2 + D*T^3'
         pass
 
 
@@ -386,7 +394,7 @@ class PolynomialElementwiseEstimator():
                 fun = self._objective_function,
                     x0 = self.polynomial.get_initial_guess_scipy(),
                     method = LocalOptimizationMethod.NELDER_MEAD.value,
-                    args = (current_BIP_count),
+                    args = (current_BIP_count,),
                     bounds = self.polynomial.get_bounds_scipy()
                 )
 

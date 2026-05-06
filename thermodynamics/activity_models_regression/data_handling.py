@@ -1,5 +1,8 @@
+from dataclasses import dataclass
+
 import pandas as pd
 import numpy as np
+import re
 
 from termcolor import colored        # for colored text output
 
@@ -11,25 +14,20 @@ class VLEDataError(Exception):
     pass
 
 
-class DataPoint(): 
+@dataclass(frozen=True)
+class DataPoint: 
 
-    def __init__(self,
-                 pressure_Pa: float,
-                 temperature_K: float,
-                 x1_mol_frac: float,
-                 y1_mol_frac: float,
-                 x2_mol_frac: float,
-                 y2_mol_frac: float,
-                 comp1: str,
-                 comp2: str):
-        self.pressure_Pa = pressure_Pa
-        self.temperature_K = temperature_K
-        self.x1_mol_frac = x1_mol_frac
-        self.y1_mol_frac = y1_mol_frac
-        self.x2_mol_frac = x2_mol_frac
-        self.y2_mol_frac = y2_mol_frac
-        self.comp1 = comp1
-        self.comp2 = comp2
+    """
+    Represents a single Vapor-Liquid Equilibrium (VLE) experimental data point.
+    """
+    pressure_Pa: float
+    temperature_K: float
+    x1_mol_frac: float
+    y1_mol_frac: float
+    x2_mol_frac: float
+    y2_mol_frac: float
+    comp1: str
+    comp2: str
 
 
 
@@ -87,7 +85,7 @@ class RawExperimentalData(list[DataPoint]):
                     TxyPoint(data_points = constant_temperature_points) if constant_temperature_points 
                         else TxyPoint(data_points = [point])
                         )
-                constant_temperature_points = []
+                constant_temperature_points = [point]
                 reference_temperature_data.append(point.temperature_K)
             else:
                 constant_temperature_points.append(point)
@@ -116,9 +114,12 @@ class RawExperimentalData(list[DataPoint]):
 class VLEData():
     
     def __init__(self,
-                 filepath: str):
+                 filepath: str, 
+                 remove_extreme_concentrations: bool = True):
         self.filepath = filepath
+        self.remove_extreme_concentrations = remove_extreme_concentrations 
         self.components: list[str] = self._parse_components_from_comment(filepath = filepath)
+        self.source: str = self._parse_source_from_comment(filepath = filepath)
         self.raw_dataframe: pd.DataFrame = pd.read_csv(filepath_or_buffer = filepath, comment='#')
         self.raw_data: RawExperimentalData = self._extract_data_from_data_frame(dataframe = self.raw_dataframe)
         self.T_x_y_points: list[TxyPoint] = self.raw_data.find_constant_temperature_points()
@@ -129,12 +130,16 @@ class VLEData():
     @staticmethod
     def _parse_components_from_comment(filepath: str) -> list[str]:
 
-        "Function to parse component names from comment lines in the data file. "
-
         components = []
+
+        # ^# matches a line starting with #
+        # \s* matches any number of spaces
+        # (component | chemical) matches either word 
+        pattern = re.compile(r"^#\s*(component|chemical)\b[\s:]*(.*)", re.IGNORECASE)
+
         with open(filepath, "r") as f:
             for line in f:
-                if line.startswith("# Component"):
+                if pattern.match(line):
                     comment_line = line.strip()
                     components.append(comment_line.split()[-1])
         
@@ -144,6 +149,25 @@ class VLEData():
         
         return components
     
+
+    @staticmethod
+    def _parse_source_from_comment(filepath: str) -> str:
+        
+        source = "no data source provided"
+
+        # ^#\s* matches '#' followed by optional spaces
+        # (source|reference) \b matches the word 'source' or 'reference' followed by a word boundary
+        # [\s:]* ignores any spaces or colons immediately following the word
+        # (.*) captures the rest of the line (the actual source text)
+        pattern = re.compile(r"^#\s*(source|reference)\b[\s:]*(.*)", re.IGNORECASE)
+
+        with open(filepath, "r") as f:
+            for line in f:
+                if pattern.match(line):
+                    source = pattern.match(line).group(2).strip() 
+                    break
+        return source
+
 
     def _extract_data_from_data_frame(self,
                                       dataframe: pd.DataFrame) -> RawExperimentalData:
@@ -179,7 +203,10 @@ class VLEData():
             )
             raw_data.append(data_point)    
         
-        return RawExperimentalData(data_points = raw_data)
+        return RawExperimentalData(
+            data_points = raw_data,
+            remove_extreme_concentrations=self.remove_extreme_concentrations
+        )
     
 
     def _get_saturation_pressure_data(self) -> None:
