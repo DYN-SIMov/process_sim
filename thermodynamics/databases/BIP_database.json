@@ -9,6 +9,7 @@
                 "activity_model": "WilsonActivityModel",
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
+                "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
                 "goodness_of_fit": 0.9997830988206212,
                 "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
@@ -16,7 +17,7 @@
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-05T07:51:42.729410"
+                "date_of_entry_creation": "2026-05-06T07:53:46.118777"
             },
             "BIP_data": {
                 "Lambda_12": [
@@ -42,6 +43,7 @@
                 "activity_model": "WilsonActivityModel",
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
+                "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
                 "goodness_of_fit": 0.9997830988206212,
                 "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
@@ -49,7 +51,7 @@
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-05T07:51:42.729410"
+                "date_of_entry_creation": "2026-05-06T07:53:46.118777"
             },
             "BIP_data": {
                 "Lambda_12": [
@@ -143,6 +145,7 @@
                 "activity_model": "NRTLActivityModel",
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialNRTL",
+                "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
                 "goodness_of_fit": 0.9987646933648201,
                 "regression_method": "Elementwise regression of each T-x-y point",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
@@ -150,7 +153,7 @@
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-05T07:46:52.846907"
+                "date_of_entry_creation": "2026-05-06T07:49:45.519511"
             },
             "BIP_data": {
                 "tau_12": [
@@ -178,6 +181,7 @@
                 "activity_model": "NRTLActivityModel",
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialNRTL",
+                "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
                 "goodness_of_fit": 0.9987646933648201,
                 "regression_method": "Elementwise regression of each T-x-y point",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
@@ -185,7 +189,7 @@
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-05T07:46:52.846907"
+                "date_of_entry_creation": "2026-05-06T07:49:45.519511"
             },
             "BIP_data": {
                 "tau_12": [

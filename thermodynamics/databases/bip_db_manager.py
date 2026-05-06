@@ -9,8 +9,9 @@ from enum import Enum
 from chemicals import CAS_from_any
 
 from thermodynamics.activity_models_regression.regression_aux import BinaryInteractionParametersRegression
-from thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialNRTL
+from thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialNRTL, PolynomialRegular
 from thermodynamics.core.properties import WilsonActivityModel, NRTLActivityModel
+
 
 from termcolor import colored  # for colored text output
 
@@ -18,6 +19,12 @@ from termcolor import colored  # for colored text output
 class ActivityModel(Enum):
     WILSON = WilsonActivityModel.__name__
     NRTL = NRTLActivityModel.__name__
+
+
+class PolynimalType(Enum):
+    DIPPR_EXPONENTIAL = PolynomialExponentialDIPPR.__name__
+    NRTL = PolynomialNRTL.__name__
+    REGULAR = PolynomialRegular.__name__
 
 
 class OverwriteAttemptError(Exception):
@@ -35,7 +42,10 @@ class BIPDatabaseManager:
         
         self.database_filepath = database_filepath
         self.data = self._load_database()
+
+        # activity model and polyomial attributes are used to check compatibility
         self.activity_model = None
+        self.polynomial = None
         
         pass
 
@@ -45,6 +55,7 @@ class BIPDatabaseManager:
                   force_overwrite: bool = False) -> None:
     
         self.activity_model = self._get_activity_model_from_estimator(BIP_estimator=BIP_estimator)
+        self.polynomial = self._get_polynomial_from_estimator(BIP_estimator=BIP_estimator)
     
         pair_key_data = self._get_component_pair_key(
             component1=BIP_estimator.VLE_data.components[0], 
@@ -103,6 +114,16 @@ class BIPDatabaseManager:
         activity_model_name = BIP_estimator.activity_model_backend.__class__.__bases__[0].__name__
         
         return ActivityModel(activity_model_name)
+    
+
+    def _get_polynomial_from_estimator(
+            self,
+            BIP_estimator: BinaryInteractionParametersRegression
+        ) -> PolynimalType:
+
+        polynomial_name = BIP_estimator.polynomial.polynomial.__class__.__name__
+
+        return PolynimalType(polynomial_name)
 
 
     def _get_component_pair_key(self,
@@ -148,8 +169,10 @@ class BIPDatabaseManager:
         )
         
         activity_model = self.activity_model.value
+        polynomial = self.polynomial.value
+
+        polynomial_equation_str = BIP_estimator.polynomial.polynomial.equation_str
         eos_backend = BIP_estimator.eos_backend.__class__.__name__
-        polynomial = BIP_estimator.polynomial.polynomial.__class__.__name__
         goodness_of_fit = BIP_estimator.goodness_of_fit
         regression_method = BIP_estimator.regression_method.value
 
@@ -161,6 +184,7 @@ class BIPDatabaseManager:
             'activity_model': activity_model,
             'eos_backend': eos_backend,
             'polynomial': polynomial,
+            'polynomial_equation': polynomial_equation_str,
             'goodness_of_fit': goodness_of_fit,
             'regression_method': regression_method,
             'VLE_data_source': VLE_data_source,
@@ -180,7 +204,7 @@ class BIPDatabaseManager:
         BIP_coeffs = BIP_estimator.BIP_polynomial_coeffs
 
         # if alpha is fixed, there are 2 coefficients instead of 4, so BIP_coeffs should be adjusted
-        if (isinstance(BIP_estimator.activity_model_backend, NRTLActivityModel) and 
+        if (self.activity_model == ActivityModel.NRTL and 
             BIP_estimator.activity_model_backend.alpha_is_fixed):
             BIP_coeffs.extend([BIP_estimator.activity_model_backend.alpha] * 2)
 
@@ -219,7 +243,7 @@ class BIPDatabaseManager:
         polynomial = BIP_estimator.polynomial.polynomial
         
         if (self.activity_model == ActivityModel.WILSON and
-            not isinstance(polynomial, PolynomialExponentialDIPPR)
+            not self.polynomial == PolynimalType.DIPPR_EXPONENTIAL
             ):
             raise PolynomialException(
                 f" The specified polynomial {polynomial} is not compatible "
@@ -229,7 +253,7 @@ class BIPDatabaseManager:
             )
         
         if (self.activity_model == ActivityModel.NRTL and
-            not isinstance(polynomial, PolynomialNRTL)
+            not self.polynomial == PolynimalType.NRTL
             ):
             raise PolynomialException(
                 f" The specified polynomial {polynomial} is not compatible "

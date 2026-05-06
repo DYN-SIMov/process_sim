@@ -220,7 +220,7 @@ class BinaryInteractionParametersRegression():
     def compare_regression_methods(self) -> None:
         
         for method, results in self.regression_results_cache.items():
-            print(f" Regression method: {method} ")
+            print(f" Regression method: {method.value} ")
             print(f" BIP polynomial coefficients: {results['BIP_polynomial_coeffs']}")
             print(f" Goodness of fit (R^2): {results['goodness_of_fit']:.4f}")
             print("-"*50)
