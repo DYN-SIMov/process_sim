@@ -9,6 +9,7 @@ from termcolor import colored        # for colored text output
 from CoolProp.CoolProp import PropsSI
 from chemicals import CAS_from_any
 
+from thermo import Chemical
 
 class VLEDataError(Exception):
     pass
@@ -225,20 +226,37 @@ class VLEData():
 
             temperature_K = T_x_y_point.temperature_K
 
-            try: 
-                saturation_pressure_Pa_1 = PropsSI('P','T',temperature_K,'Q',1,CAS_from_any(self.components[0]))
-                saturation_pressure_Pa_2 = PropsSI('P','T',temperature_K,'Q',1,CAS_from_any(self.components[1]))
+            saturation_pressure_Pa_data = []
+            for component in self.components:
+                saturation_pressure_Pa = self._get_saturation_pressure_value(
+                    component_name=component,
+                    temperature_K=temperature_K
+                )
+                saturation_pressure_Pa_data.append(saturation_pressure_Pa)
 
-                T_x_y_point.comp_1_saturation_pressure_Pa = saturation_pressure_Pa_1
-                T_x_y_point.comp_2_saturation_pressure_Pa = saturation_pressure_Pa_2
-            except ValueError:
-                msg = (f"Data import [warning]: "
-                       f" Saturation pressure calculation failed for T = {temperature_K:.2f} K. "
-                       f" Skipping this data point." 
-                       f" Check if critical temperature is exceeded or if components are not supported by CoolProp. ")
-                print(colored(msg, 'yellow'))
+            if any(np.isnan(saturation_pressure_Pa_data)):
                 T_x_y_points_to_remove.append(T_x_y_point)
-                continue
+            else: 
+                T_x_y_point.comp_1_saturation_pressure_Pa = saturation_pressure_Pa_data[0]
+                T_x_y_point.comp_2_saturation_pressure_Pa = saturation_pressure_Pa_data[1]
 
         for T_x_y_point in T_x_y_points_to_remove:
             self.T_x_y_points.remove(T_x_y_point)
+
+
+    def _get_saturation_pressure_value(self, 
+                                       component_name: str,
+                                       temperature_K: float) -> float:
+        
+        try: 
+            component = Chemical(CAS_from_any(component_name), T=temperature_K*1000)
+            saturation_pressure_Pa = component.Psat
+            return saturation_pressure_Pa
+        except ValueError: 
+            msg = (f"Data import [warning]: "
+                   f" Saturation pressure calculation failed for T = {temperature_K:.2f} K and "
+                   f" component {component_name} for Thermo library. Check if critical temperature" 
+                   f" is exceeded or if component is not supported by Thermo. "
+                   f" Skipping this data point.")
+            print(colored(msg, 'yellow'))
+            return float('nan')

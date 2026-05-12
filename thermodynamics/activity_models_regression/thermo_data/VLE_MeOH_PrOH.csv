@@ -1,0 +1,14 @@
+# Isobaric VLE data for methanol-1-propanol
+# Component 1: methanol
+# Component 2: n-propanol
+# Source: Hill and Winkle,"Vapor-liquid equilibria of methanol binary systems: methanol-propanol, methanol-butanol and methanol-pentanol, Ind. Eng. Chem. 1952, 44, 1, 205–210, https://doi.org/10.1021/ie50505a056",,
+T (degC),P (atm),x_methanol,y_methanol
+82,1.0,0.09,0.26
+83.2,1.0,0.172,0.455
+79.7,1.0,0.319,0.668
+78.3,1.0,0.445,0.777
+76.7,1.0,0.555,0.842
+73.9,1.0,0.652,0.889
+71.3,1.0,0.738,0.921
+69.4,1.0,0.814,0.951
+66.7,1.0,0.883,0.971
