@@ -17,7 +17,7 @@ def main():
 
     VLE_data = VLEData(
         filepath = 'thermodynamics/activity_models_regression/thermo_data/' \
-        'VLE_MeOH_PrOH.csv'
+        'VLE_H2O_NH3.csv'
     )
     
     BIP_estimator = BinaryInteractionParametersRegression(

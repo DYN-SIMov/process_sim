@@ -248,15 +248,79 @@ class VLEData():
                                        component_name: str,
                                        temperature_K: float) -> float:
         
-        try: 
-            component = Chemical(CAS_from_any(component_name), T=temperature_K*1000)
+        [saturation_pressure_Pa, success] = self._get_saturation_pressure_Thermo(
+            component_name=component_name,
+            temperature_K=temperature_K
+        )
+
+        if not success: 
+            msg = ("Attempting to get saturation pressure using CoolProp library as fallback. ")
+            print(colored(msg, 'yellow'))
+            [saturation_pressure_Pa, success] = self._get_saturation_pressure_CoolProp(
+                component_name=component_name,
+                temperature_K=temperature_K
+            )
+
+        return saturation_pressure_Pa
+        
+
+    def _get_saturation_pressure_Thermo(self, 
+                                        component_name: str,
+                                        temperature_K: float) -> tuple[float, bool]:
+        
+        try:
+            component = Chemical(CAS_from_any(component_name), T=temperature_K)
             saturation_pressure_Pa = component.Psat
-            return saturation_pressure_Pa
-        except ValueError: 
+            success = True
+        except ValueError:
             msg = (f"Data import [warning]: "
                    f" Saturation pressure calculation failed for T = {temperature_K:.2f} K and "
-                   f" component {component_name} for Thermo library. Check if critical temperature" 
-                   f" is exceeded or if component is not supported by Thermo. "
-                   f" Skipping this data point.")
+                   f" component {component_name} for Thermo library. Check if component is "
+                   f" supported by Thermo package. ")
             print(colored(msg, 'yellow'))
-            return float('nan')
+            success = False
+            return [float('nan'), success]
+
+        vp = component.VaporPressure
+        if temperature_K < vp.Tmin or temperature_K > vp.Tmax:  
+            msg = (f"Data import [warning]: "
+                    f" temperature T = {temperature_K:.2f} K is out of valid range for"
+                    f" saturation pressure calculation for component {component_name} "
+                    f" using Thermo library. Valid range is {vp.Tmin:.2f} K to {vp.Tmax:.2f} K." 
+            )
+            print(colored(msg, 'yellow'))   
+
+            skip_data_point_input = input(" Do you want to skip this data point? (y/n): ")
+            if skip_data_point_input.lower() == 'y':
+                return [float('nan'), success]
+            elif skip_data_point_input.lower() == 'n':    
+                saturation_pressure_Pa = component.Psat
+                return [saturation_pressure_Pa, success]      
+            else: 
+                print(colored(" Invalid input. Skipping this data point by default. ", 'yellow'))
+                return [float('nan'), success]
+
+        return [saturation_pressure_Pa, success]
+    
+
+    def _get_saturation_pressure_CoolProp(self, 
+                             component_name: str,
+                             temperature_K: float) -> tuple[float, bool]:
+        
+        try:
+            saturation_pressure_Pa = PropsSI(
+                'P', 'T', temperature_K, 'Q', 1, CAS_from_any(component_name)
+            )
+            success = True
+            return [saturation_pressure_Pa, success]
+        
+        except ValueError:
+            msg = (f"Data import [warning]: "
+                   f" Saturation pressure calculation failed for T = {temperature_K:.2f} K and "
+                   f" component {component_name} for CoolProp library. Check if component is "
+                   f" supported by CoolProp package or if temperature exceeds the critical"
+                   f" temperature. No fallback available, skipping this data point.")
+            print(colored(msg, 'yellow'))
+            success = False
+            return [float('nan'), success]
+        
