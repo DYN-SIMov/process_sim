@@ -17,6 +17,8 @@ from joblib import delayed as joblib_delayed
 from typing import Protocol
 from enum import Enum
 
+from pymoo.operators.sampling.rnd import FloatRandomSampling
+
 
 class LocalOptimizationMethod(Enum):
     NELDER_MEAD = "Nelder-Mead"
@@ -652,4 +654,51 @@ class PymooCallbackHandler(Callback):
             ]
         ) 
         return condition
+    
+
+class OwnBiasedSampling(FloatRandomSampling):
+
+    def __init__(self,
+                 initial_guess: np.ndarray,
+                 fraction_of_biased_samples: float = 0.5,
+                 bias_strength: float = 0.5,
+                 seed: int = 42):
+        super().__init__()
+        self.initial_guess = initial_guess
+        self.fraction_of_biased_samples = fraction_of_biased_samples
+        self.bias_strength = bias_strength
+        self.seed = seed
+
+        self.random_engine = np.random.default_rng(seed=self.seed)
+
+    def _do(self, 
+            problem, 
+            n_samples,
+            random_state=None,
+            *args,
+            **kwargs
+        ) -> np.ndarray:    
+
+        n_biased = int(n_samples * self.fraction_of_biased_samples)
+        n_random = n_samples - n_biased
+        xl = problem.xl
+        xu = problem.xu
+
+        random_samples = self.random_engine.uniform(
+            low=xl, high=xu, size=(n_random, xl.shape[0])
+        )
+
+        biased_samples = (
+            self.initial_guess + 
+            self.bias_strength * self.random_engine.uniform(
+                low=-1.0, high=1.0, size=(n_biased, xl.shape[0])
+            )
+        )
+
+        if problem.has_bounds():
+            biased_samples = np.clip(biased_samples, xl, xu)
+
+        population = np.vstack((random_samples, biased_samples))
+
+        return population
                 

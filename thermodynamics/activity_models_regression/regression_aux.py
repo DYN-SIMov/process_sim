@@ -8,7 +8,7 @@ from termcolor import colored                             # for colored text out
 # for regression of DIPPR parameters directly from VLE data
 from pymoo.core.problem import Problem
 from pymoo.core.population import Population
-from pymoo.algorithms.soo.nonconvex.ga import GA
+from pymoo.algorithms.soo.nonconvex.ga import GA, FloatRandomSampling
 from pymoo.optimize import minimize as pymoo_minimize
 from joblib import Parallel as JoblibParallel
 from joblib import delayed as joblib_delayed
@@ -27,6 +27,7 @@ from optimization import PymooCallbackHandler, Callback
 from data_handling import VLEData
 
 from optimization import PymooPolynomialEstimator
+from optimization import OwnBiasedSampling
 
 from typing import Type
 from enum import Enum
@@ -71,9 +72,19 @@ class BinaryInteractionParametersRegression():
 
         pass
         
+
+    def estimate_polynomial_elementwise(self) -> None:
+
+        " Method for regressing BIP parameters for each T-x-y point individually and then "
+        " regressing the polynomial coefficients based on the results of elementwise regression. " 
+
+        self._regress_BIP_parameters_elementwise()
+        self._estimate_polynomial_from_elementwise_optimisation()
+
+        pass
      
 
-    def regress_BIP_parameters_elementwise(self) -> None:
+    def _regress_BIP_parameters_elementwise(self) -> None:
         " Function to regress Wilson BIP parameters for each temperature point "
         " (i.e., data_set) individually. "
 
@@ -113,8 +124,7 @@ class BinaryInteractionParametersRegression():
         pass
 
 
-
-    def estimate_polynomial_from_elementwise_optimisation(self) -> None:
+    def _estimate_polynomial_from_elementwise_optimisation(self) -> None:
 
         " Method for regressing DIPPR polynomial parameters based on results of elementwise "
         " regression of Binary Interaction Parameters"
@@ -148,7 +158,6 @@ class BinaryInteractionParametersRegression():
             BIP_polynomial_coeffs=BIP_polynomial_coeffs
         )
 
-        
         pass
 
 
@@ -156,7 +165,8 @@ class BinaryInteractionParametersRegression():
     def estimate_polynomial_from_VLE_data(self,
                                           n_jobs:int = 1,
                                           is_memetic:bool = True,
-                                          verbose:bool = False) -> None: 
+                                          verbose:bool = False,
+                                          use_biased_initialization: bool = True) -> None: 
 
         " Method for regressing parameters directly from VLE data "
         activity_model = self.activity_model_backend
@@ -185,8 +195,26 @@ class BinaryInteractionParametersRegression():
             polynomial=self.polynomial,
         )
 
+        if use_biased_initialization is True: 
+            if self.regression_results_cache[RegressionMethod.ELEMENTWISE] is None:
+                msg = (" No elementwise optimization results found to implement biased "
+                       "initialization. Running elementwise optimization now. ")
+                print(msg)
+                self.estimate_polynomial_elementwise()
+            initial_guess = np.concatenate(
+                self.regression_results_cache[RegressionMethod.ELEMENTWISE]['BIP_polynomial_coeffs']
+            )
+            initial_population = OwnBiasedSampling(
+                initial_guess=initial_guess,
+                fraction_of_biased_samples=0.2,
+                bias_strength=0.5
+            )
+        else: 
+            initial_population = FloatRandomSampling()
+
         algorithm = GA(pop_size=1000,
-                       eliminate_duplicates=True)
+                       eliminate_duplicates=True,
+                       sampling=initial_population)
         
         results = pymoo_minimize(
             problem=problem,

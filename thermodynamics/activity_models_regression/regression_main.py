@@ -28,8 +28,7 @@ def main():
         polynomial_form=AbsoluteForm
     )
 
-    BIP_estimator.regress_BIP_parameters_elementwise()
-    BIP_estimator.estimate_polynomial_from_elementwise_optimisation()
+    BIP_estimator.estimate_polynomial_elementwise()
     BIP_estimator.results_visualization(get_parity_plot=True,
                                         get_VLE_curve=True)
     
@@ -56,6 +55,8 @@ if __name__ == "__main__":
 
 """
 TODO: 
+0) fix the database export considering that not all temperature points from the experimental data may be used
+
 1) check the water-ammonia issue with NRTL
 2) improve NRTL model regression for varying alpha
 """

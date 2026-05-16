@@ -214,10 +214,10 @@ class VLEData():
     
         """ 
         The method's objectives are twofold: 
-        1) get saturation pressures (in Pa) for each component at each value of the temperature in the avaialble VLE data set
-        using CoolProp library 
-        2) filter out VLE data points at temperatures for which saturation pressure could not have been evaluated 
-        (typically when VLE temperature point is above component's critical temperature)
+        1) get saturation pressures (in Pa) for each component at each value of the temperature 
+        in the available VLE data
+        2) filter out VLE data points at temperatures for which saturation pressure could not 
+        have been evaluated 
         """
 
         T_x_y_points_to_remove = []
