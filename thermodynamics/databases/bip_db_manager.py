@@ -155,18 +155,27 @@ class BIPDatabaseManager:
         
         component1, component2 = BIP_estimator.VLE_data.components
         VLE_data_source = BIP_estimator.VLE_data.source
-        temperature_lb_K = min(
-            [point.temperature_K for point in BIP_estimator.VLE_data.raw_data.data_points]
-        )
-        temperature_ub_K = max(
-            [point.temperature_K for point in BIP_estimator.VLE_data.raw_data.data_points]
-        )
-        pressure_lb_Pa = min(
-            [point.pressure_Pa for point in BIP_estimator.VLE_data.raw_data.data_points]
-        )
-        pressure_ub_Pa = max(
-            [point.pressure_Pa for point in BIP_estimator.VLE_data.raw_data.data_points]
-        )
+
+        # ----------------------------------------------------------------------
+        # extracting temperature and pressure ranges considerd in the regression
+        # this consideres that some Txy points may be removed by data_handling.py
+        temperature_lb_K = 0.0
+        temperature_ub_K = 0.0
+        pressure_lb_Pa = 0.0
+        pressure_ub_Pa = 0.0
+
+        for point in BIP_estimator.VLE_data.T_x_y_points:
+            if point.temperature_K < temperature_lb_K or temperature_lb_K == 0.0:
+                temperature_lb_K = point.temperature_K
+            if point.temperature_K > temperature_ub_K:
+                temperature_ub_K = point.temperature_K
+            
+            for datum in point.data:
+                if datum.pressure_Pa < pressure_lb_Pa or pressure_lb_Pa == 0.0:
+                    pressure_lb_Pa = datum.pressure_Pa
+                if datum.pressure_Pa > pressure_ub_Pa:
+                    pressure_ub_Pa = datum.pressure_Pa
+        # ----------------------------------------------------------------------        
         
         activity_model = self.activity_model.value
         polynomial = self.polynomial.value

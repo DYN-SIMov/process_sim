@@ -55,8 +55,6 @@ if __name__ == "__main__":
 
 """
 TODO: 
-0) fix the database export considering that not all temperature points from the experimental data may be used
-
 1) check the water-ammonia issue with NRTL
 2) improve NRTL model regression for varying alpha
 """

@@ -77,27 +77,28 @@
                 "activity_model": "WilsonActivityModel",
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
-                "goodness_of_fit": 0.998395739541844,
+                "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
+                "goodness_of_fit": 0.998976500429708,
                 "regression_method": "Elementwise regression of each T-x-y point",
                 "VLE_data_source": "Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Description With A Modified Cubic Equation Of State, Smolen, Manley and Poling, 1991",
                 "temperature_lb_K": 293.15,
                 "temperature_ub_K": 413.15,
                 "pressure_lb_Pa": 6300.0,
                 "pressure_ub_Pa": 3099800.0,
-                "date_of_entry_creation": "2026-05-05T08:07:43.841741"
+                "date_of_entry_creation": "2026-05-16T12:34:31.546643"
             },
             "BIP_data": {
                 "Lambda_12": [
-                    0.49294798047697197,
-                    0.12882131860243298,
-                    0.09833238859189072,
-                    0.0006141083865335767
+                    0.6252817609905067,
+                    0.12793905604611883,
+                    0.09941577880181593,
+                    0.00018726365607870017
                 ],
                 "Lambda_21": [
-                    -1.911181444208069,
-                    -2.1948170986017206,
-                    1.207308821477985,
-                    -0.013770113717278392
+                    38.85030236582028,
+                    -13.714355805077158,
+                    -7.31147021020926,
+                    0.012423288955169014
                 ]
             }
         },
@@ -110,27 +111,28 @@
                 "activity_model": "WilsonActivityModel",
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
-                "goodness_of_fit": 0.998395739541844,
+                "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
+                "goodness_of_fit": 0.998976500429708,
                 "regression_method": "Elementwise regression of each T-x-y point",
                 "VLE_data_source": "Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Description With A Modified Cubic Equation Of State, Smolen, Manley and Poling, 1991",
                 "temperature_lb_K": 293.15,
                 "temperature_ub_K": 413.15,
                 "pressure_lb_Pa": 6300.0,
                 "pressure_ub_Pa": 3099800.0,
-                "date_of_entry_creation": "2026-05-05T08:07:43.841741"
+                "date_of_entry_creation": "2026-05-16T12:34:31.546643"
             },
             "BIP_data": {
                 "Lambda_12": [
-                    0.49294798047697197,
-                    0.12882131860243298,
-                    0.09833238859189072,
-                    0.0006141083865335767
+                    0.6252817609905067,
+                    0.12793905604611883,
+                    0.09941577880181593,
+                    0.00018726365607870017
                 ],
                 "Lambda_21": [
-                    -1.911181444208069,
-                    -2.1948170986017206,
-                    1.207308821477985,
-                    -0.013770113717278392
+                    38.85030236582028,
+                    -13.714355805077158,
+                    -7.31147021020926,
+                    0.012423288955169014
                 ]
             }
         }
