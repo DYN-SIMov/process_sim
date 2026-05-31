@@ -21,10 +21,10 @@ def main():
     )
     
     BIP_estimator = BinaryInteractionParametersRegression(
-        activity_model_regression=WilsonActivityModelRegression,
+        activity_model_regression=NRTLActivityModelRegression,
         equation_of_state=SoaveRedlichKwongEoSBackend,
         VLE_data=VLE_data,
-        polynomial=PolynomialExponentialDIPPR(degree=4),
+        polynomial=PolynomialNRTL(degree=4),
         polynomial_form=AbsoluteForm
     )
 
