@@ -435,6 +435,7 @@ class PymooPolynomialEstimator(Problem):
                  objective_function,
                  VLE_data,
                  polynomial,
+                 number_of_regressed_parameters,
                  n_jobs = 1,
                  backend = 'loky', 
                  **kwargs):
@@ -442,6 +443,7 @@ class PymooPolynomialEstimator(Problem):
         self.objective_function = objective_function
         self.VLE_data = VLE_data
         self.polynomial = polynomial
+        self.number_of_regressed_parameters = number_of_regressed_parameters
         self.n_jobs = n_jobs
         self.backend = backend
 
@@ -468,9 +470,12 @@ class PymooPolynomialEstimator(Problem):
         try: 
             with np.errstate(invalid="raise", divide="raise", over="raise"):
 
-                objective_function_val = self.objective_function(coeffs=coeffs,
-                                                                 VLE_data=self.VLE_data,
-                                                                 polynomial=self.polynomial)
+                objective_function_val = self.objective_function(
+                    coeffs=coeffs,
+                    VLE_data=self.VLE_data,
+                    polynomial=self.polynomial,
+                    number_of_regressed_parameters=self.number_of_regressed_parameters
+                )
                 return objective_function_val
             
         except FloatingPointError as e: 

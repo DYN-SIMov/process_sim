@@ -12,14 +12,17 @@ from thermodynamics.activity_models_regression.optimization import AbsoluteForm,
 
 from thermodynamics.databases.bip_db_manager import BIPDatabaseManager
 
+from functools import partial
 
 def main():
 
     VLE_data = VLEData(
         filepath = 'thermodynamics/activity_models_regression/thermo_data/' \
-        'VLE_H2O_NH3.csv'
+        'VLE_MeOH_H2O.csv'
     )
     
+    # nrtl_varying_alpha = partial(NRTLActivityModelRegression, alpha_is_fixed=False, alpha=0.3)
+
     BIP_estimator = BinaryInteractionParametersRegression(
         activity_model_regression=NRTLActivityModelRegression,
         equation_of_state=SoaveRedlichKwongEoSBackend,

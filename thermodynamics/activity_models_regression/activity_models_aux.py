@@ -1,6 +1,8 @@
 import numpy as np
 
 from typing import Protocol
+from dataclasses import dataclass
+from abc import ABC, abstractmethod
 
 import sys
 import os
@@ -9,29 +11,20 @@ from termcolor import colored
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 from thermodynamics.core.properties import WilsonActivityModel, NRTLActivityModel
 
+@dataclass
+class BinaryInteractionParameter():
+    name: str
+    value: float
+    initial_guess: float
+    bounds: tuple
+    temperature_dependant: bool
+    is_regressed: bool 
 
 
 class ActivityModelRegressionInterface(Protocol):
 
-    @classmethod
-    def get_BIP_names(cls) -> list[str]:
-        pass
-
     @staticmethod
     def get_activity_coefs(*args, **kwargs) -> np.ndarray:
-        pass
-
-    def objective_function_elementwise(self, 
-                                       theta: np.ndarray,
-                                       regression_params) -> float:
-        pass
-
-    @staticmethod
-    def initial_guess_elementwise(initial_guess) -> np.ndarray:
-        pass
-
-    @staticmethod
-    def get_bounds_elementwise() -> tuple:
         pass
 
     @staticmethod
@@ -41,12 +34,65 @@ class ActivityModelRegressionInterface(Protocol):
         pass
 
 
-class WilsonActivityModelRegression(WilsonActivityModel):
-    
-    @classmethod
-    def get_BIP_names(cls) -> list[str]:
-        return ['Lambda_12', 'Lambda_21']
+class RegressionAuxiliariesMixin(): 
 
+
+    def get_BIP_names(self) -> list[str]:
+        names = []
+        for bip in self.BIPs:
+            names.append(bip.name)
+        return names
+
+
+    def initial_guess_elementwise(self, initial_guess) -> np.ndarray:
+        
+        """
+        Method to specify initial guess input for the elementwise estimation of Wilson BIPs
+        """
+
+        if initial_guess is not None: 
+            return initial_guess
+        
+        initial_guess = [] 
+        for bip in self.BIPs:
+            if bip.is_regressed:
+                initial_guess.append(bip.initial_guess)
+        return np.array(initial_guess)
+        
+    
+    def get_bounds_elementwise(self) -> tuple:
+
+        """
+        Method to get bounds for elementwise estimation of Wilson BIP
+        """
+
+        bounds_list = []
+        for bip in self.BIPs:
+            if bip.is_regressed:
+                bounds_list.append(bip.bounds)
+
+        bounds_tuple = tuple(bounds_list)
+
+        return bounds_tuple
+    
+
+    def get_number_of_regressed_parameters(self) -> int:
+
+        """
+        Method to get number of regressed parameters for Wilson activity model
+        """
+
+        number_of_parameters = 0
+        for bip in self.BIPs:
+            if bip.is_regressed:
+                number_of_parameters += 1
+
+        return number_of_parameters
+        
+    
+
+class WilsonActivityModelRegression(WilsonActivityModel, RegressionAuxiliariesMixin):
+    
 
     def __init__(self,
                  components,
@@ -54,7 +100,26 @@ class WilsonActivityModelRegression(WilsonActivityModel):
         super().__init__(components=components,
                          pure_component_data_backend=pure_component_data_backend)
         
-        self.number_of_BIP_parameters:int = 2
+        lambda_12 = BinaryInteractionParameter(
+            name='Lambda_12',
+            value=None,
+            initial_guess=1.0,
+            bounds=(1e-3, None),
+            temperature_dependant=True,
+            is_regressed=True
+        )
+        lambda_21 = BinaryInteractionParameter(
+            name='Lambda_21',
+            value=None,
+            initial_guess=1.0,
+            bounds=(1e-3, None),
+            temperature_dependant=True,
+            is_regressed=True
+        )
+
+        self.BIPs = [lambda_12, lambda_21]
+
+        pass
 
 
     @staticmethod
@@ -88,34 +153,6 @@ class WilsonActivityModelRegression(WilsonActivityModel):
 
         return gamma_1, gamma_2
     
-
-    @staticmethod
-    def initial_guess_elementwise(initial_guess) -> np.ndarray:
-        
-        """
-        Method to specify initial guess input for the elementwise estimation of Wilson BIPs
-        """
-
-        if initial_guess is None:
-            return np.array([1.0, 1.0])
-        else:
-            return initial_guess
-        
-    
-    @staticmethod
-    def get_bounds_elementwise() -> tuple:
-
-        """
-        Method to get bounds for elementwise estimation of Wilson BIP
-        """
-
-        Lambda_12_bounds = (1e-3, None)
-        Lambda_21_bounds = (1e-3, None)
-        
-        bounds = (Lambda_12_bounds, Lambda_21_bounds)
-
-        return bounds
-
 
     @staticmethod
     def get_message_elementwise(regression_params: dict,
@@ -192,12 +229,7 @@ class WilsonActivityModelRegression(WilsonActivityModel):
 
 
 
-class NRTLActivityModelRegression(NRTLActivityModel): 
-
-    @classmethod
-    def get_BIP_names(cls) -> list[str]:
-        return ['tau_12', 'tau_21', 'alpha_12', 'alpha_21']
-
+class NRTLActivityModelRegression(NRTLActivityModel, RegressionAuxiliariesMixin): 
 
     def __init__(self,
                  components,
@@ -209,8 +241,46 @@ class NRTLActivityModelRegression(NRTLActivityModel):
         
         self.alpha_is_fixed = alpha_is_fixed
         self.alpha = alpha
-        self.number_of_BIP_parameters:int = 2 if alpha_is_fixed else 4
-        pass
+        
+        tau_12 = BinaryInteractionParameter(
+            name='tau_12',
+            value=None,
+            initial_guess=1.0,
+            bounds=(1e-3, None),
+            temperature_dependant=True,
+            is_regressed=True
+        )
+
+        tau_21 = BinaryInteractionParameter(
+            name='tau_21',
+            value=None,
+            initial_guess=1.0,
+            bounds=(1e-3, None),
+            temperature_dependant=True,
+            is_regressed=True
+        )
+
+        alpha_12 = BinaryInteractionParameter(
+            name='alpha_12',
+            value=alpha if alpha_is_fixed else None,
+            initial_guess=alpha,
+            bounds=None if alpha_is_fixed else (1e-3, 0.5),
+            temperature_dependant=False,
+            is_regressed=False if alpha_is_fixed else True
+        )
+
+        alpha_21 = BinaryInteractionParameter(
+            name='alpha_21',
+            value=alpha if alpha_is_fixed else None,
+            initial_guess=alpha,
+            bounds=None if alpha_is_fixed else (1e-3, 0.5),
+            temperature_dependant=False,
+            is_regressed=False if alpha_is_fixed else True
+        )
+
+        self.BIPs = [tau_12, tau_21, alpha_12, alpha_21]
+        
+
 
 
     def get_activity_coefs(self, 
@@ -246,41 +316,6 @@ class NRTLActivityModelRegression(NRTLActivityModel):
         gamma_2 = np.exp(ln_gamma_2)
 
         return gamma_1, gamma_2
-
-
-    def initial_guess_elementwise(self,
-                                  initial_guess) -> np.ndarray:
-        
-        """
-        Method to specify initial guess input for the elementwise estimation of NRTL BIPs
-        """
-
-        if initial_guess is None:
-            if self.alpha_is_fixed:
-                return np.array([1.0, 1.0])
-            else:
-                return np.array([1.0, 1.0, 0.3, 0.3])
-        else:
-            return initial_guess
-        
-
-    def get_bounds_elementwise(self) -> tuple:
-
-        """
-        Method to get bounds for elementwise estimation of NRTL BIP
-        """
-
-        tau_12_bounds = (1e-3, None)
-        tau_21_bounds = (1e-3, None)
-        
-        if self.alpha_is_fixed:
-            bounds = (tau_12_bounds, tau_21_bounds)
-        else:
-            alpha_12_bounds = (1e-3, None)
-            alpha_21_bounds = (1e-3, None)
-            bounds = (tau_12_bounds, tau_21_bounds, alpha_12_bounds, alpha_21_bounds)
-
-        return bounds
     
     
     def get_message_elementwise(self,

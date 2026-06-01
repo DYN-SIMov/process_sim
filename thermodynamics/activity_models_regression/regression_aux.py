@@ -63,6 +63,8 @@ class BinaryInteractionParametersRegression():
             components=self.VLE_data.components,
             pure_component_data_backend=pure_component_data_backend
         )
+
+        self.number_of_regressed_parameters = self.activity_model_backend.get_number_of_regressed_parameters()
         
         self.elementwise_opt_results: list = None
         self.regression_results_cache: dict = {}
@@ -172,8 +174,8 @@ class BinaryInteractionParametersRegression():
         activity_model = self.activity_model_backend
 
         scipy_bounds = self.polynomial.get_bounds_scipy()
-        lower_bounds = [bound[0] for bound in scipy_bounds]*activity_model.number_of_BIP_parameters
-        upper_bounds = [bound[1] for bound in scipy_bounds]*activity_model.number_of_BIP_parameters
+        lower_bounds = [bound[0] for bound in scipy_bounds] * self.number_of_regressed_parameters
+        upper_bounds = [bound[1] for bound in scipy_bounds] * self.number_of_regressed_parameters
 
         if is_memetic: 
             memetic_callback = PymooCallbackHandler(
@@ -193,6 +195,7 @@ class BinaryInteractionParametersRegression():
             upper_bounds=upper_bounds,
             VLE_data=self.VLE_data,
             polynomial=self.polynomial,
+            number_of_regressed_parameters=self.number_of_regressed_parameters
         )
 
         if use_biased_initialization is True: 
@@ -219,7 +222,7 @@ class BinaryInteractionParametersRegression():
         results = pymoo_minimize(
             problem=problem,
             algorithm=algorithm,
-            termination=("n_gen", 500),
+            termination=("n_gen", 100),
             seed=1,
             verbose=verbose,
             callback=memetic_callback
@@ -230,7 +233,7 @@ class BinaryInteractionParametersRegression():
             total_residual = results.F[0]
         )
 
-        BIP_coeffs = results.X.reshape((activity_model.number_of_BIP_parameters, 
+        BIP_coeffs = results.X.reshape((self.number_of_regressed_parameters, 
                                         self.polynomial.degree))
         BIP_polynomial_coeffs = [
             self.polynomial.get_absolute_coeffs(
@@ -379,10 +382,11 @@ class BinaryInteractionParametersRegression():
     def _objective_function_from_VLE(self,
                                      coeffs: np.ndarray,
                                      polynomial,
-                                     VLE_data) -> float:
+                                     VLE_data,
+                                     number_of_regressed_parameters) -> float:
 
         param_coeffs = coeffs.reshape(
-            (self.activity_model_backend.number_of_BIP_parameters, polynomial.degree)
+            (number_of_regressed_parameters, polynomial.degree)
         )
         
         error_data = []

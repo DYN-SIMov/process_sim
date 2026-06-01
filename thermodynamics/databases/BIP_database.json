@@ -85,7 +85,7 @@
                 "temperature_ub_K": 413.15,
                 "pressure_lb_Pa": 6300.0,
                 "pressure_ub_Pa": 3099800.0,
-                "date_of_entry_creation": "2026-05-16T12:34:31.546643"
+                "date_of_entry_creation": "2026-06-01T07:22:50.519391"
             },
             "BIP_data": {
                 "Lambda_12": [
@@ -119,7 +119,7 @@
                 "temperature_ub_K": 413.15,
                 "pressure_lb_Pa": 6300.0,
                 "pressure_ub_Pa": 3099800.0,
-                "date_of_entry_creation": "2026-05-16T12:34:31.546643"
+                "date_of_entry_creation": "2026-06-01T07:22:50.519391"
             },
             "BIP_data": {
                 "Lambda_12": [
@@ -216,27 +216,27 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialNRTL",
                 "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
-                "goodness_of_fit": 0.9987646933648201,
-                "regression_method": "Elementwise regression of each T-x-y point",
+                "goodness_of_fit": 0.9994565969418504,
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-06T07:49:45.519511"
+                "date_of_entry_creation": "2026-06-01T07:45:10.800911"
             },
             "BIP_data": {
                 "tau_12": [
-                    0.6919061447199054,
-                    0.11633650481910297,
-                    0.10741017701938041,
-                    -0.002647940744136229
+                    5.16647315933769,
+                    -702.946820338796,
+                    302.935861772253,
+                    3.1482722241967056
                 ],
                 "tau_21": [
-                    0.692576084329888,
-                    0.11630622423282697,
-                    0.10740914415797365,
-                    -0.0027038336430941926
+                    -99.99999999999822,
+                    988.0808788130948,
+                    19.900177591060558,
+                    -0.05320486202003892
                 ],
                 "alpha_12": 0.3,
                 "alpha_21": 0.3
@@ -252,27 +252,27 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialNRTL",
                 "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
-                "goodness_of_fit": 0.9987646933648201,
-                "regression_method": "Elementwise regression of each T-x-y point",
+                "goodness_of_fit": 0.9994565969418504,
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-06T07:49:45.519511"
+                "date_of_entry_creation": "2026-06-01T07:45:10.800911"
             },
             "BIP_data": {
                 "tau_12": [
-                    0.6919061447199054,
-                    0.11633650481910297,
-                    0.10741017701938041,
-                    -0.002647940744136229
+                    5.16647315933769,
+                    -702.946820338796,
+                    302.935861772253,
+                    3.1482722241967056
                 ],
                 "tau_21": [
-                    0.692576084329888,
-                    0.11630622423282697,
-                    0.10740914415797365,
-                    -0.0027038336430941926
+                    -99.99999999999822,
+                    988.0808788130948,
+                    19.900177591060558,
+                    -0.05320486202003892
                 ],
                 "alpha_12": 0.3,
                 "alpha_21": 0.3
