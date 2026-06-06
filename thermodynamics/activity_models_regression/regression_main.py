@@ -21,10 +21,10 @@ def main():
         'VLE_MeOH_H2O.csv'
     )
     
-    # nrtl_varying_alpha = partial(NRTLActivityModelRegression, alpha_is_fixed=False, alpha=0.3)
+    nrtl_varying_alpha = partial(NRTLActivityModelRegression, alpha_is_fixed=False, alpha=0.3)
 
     BIP_estimator = BinaryInteractionParametersRegression(
-        activity_model_regression=NRTLActivityModelRegression,
+        activity_model_regression=nrtl_varying_alpha,
         equation_of_state=SoaveRedlichKwongEoSBackend,
         VLE_data=VLE_data,
         polynomial=PolynomialNRTL(degree=4),

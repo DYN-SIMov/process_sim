@@ -724,22 +724,33 @@ class OptimizationVectorMapper():
 
         pass
 
-    def get_pymoo_config(self) -> dict: 
 
-        temp_dep_BIPs = self.temp_dep_bips
-        temp_indep_BIPs = self.temp_indep_bips
+    def elementwise_regression_adapter(self, optimization_vector: np.ndarray) -> np.ndarray:
+
+        if len(optimization_vector) == len(self.temp_dep_bips) + len(self.temp_indep_bips):
+            return optimization_vector
+        
+        for bip in self.temp_indep_bips:
+            optimization_vector = np.append(optimization_vector, bip.initial_guess)
+
+        return optimization_vector
+
+
+    def get_pymoo_config(self) -> dict: 
 
         lower_bounds = []
         upper_bounds = []
 
-        for bip in temp_dep_BIPs:
-            bounds = self.polynomial.get_bounds_scipy()
-            lower_bounds.extend([bound[0] for bound in bounds])
-            upper_bounds.extend([bound[1] for bound in bounds])
+        for bip in self.activity_model.BIPs: 
+            if not bip.is_regressed:
+                continue
 
-        for bip in temp_indep_BIPs:
-            lower_bounds.append(bip.bounds[0])
-            upper_bounds.append(bip.bounds[1])
+            if bip.is_temperature_dependant:
+                lower_bounds.extend(self.polynomial.get_bounds_scipy()[0])
+                upper_bounds.extend(self.polynomial.get_bounds_scipy()[1])
+            else:
+                lower_bounds.append(bip.bounds[0])
+                upper_bounds.append(bip.bounds[1])
 
         number_of_parameters = len(lower_bounds)
 
@@ -752,26 +763,21 @@ class OptimizationVectorMapper():
         return config
 
 
-    def decode_pymoo_vector(self, optimization_vector) -> dict: 
+    def decode_pymoo_vector(self, optimization_vector) -> list: 
 
-        coeffs = []
-        scalars = []
+        decoded_map = {}
         param_ind = 0
         degree = self.polynomial.degree
 
-        temp_dep_bips = self.temp_dep_bips
-        for bip in temp_dep_bips: 
-            coeffs.append(
-                optimization_vector[param_ind : param_ind + degree]
-            )
-            param_ind += degree
+        for bip in self.activity_model.BIPs: 
+            if not bip.is_regressed:
+                continue
 
-        temp_indep_bips = self.temp_indep_bips
-        for bip in temp_indep_bips:
-            scalars.append(optimization_vector[param_ind])
-            param_ind += 1
+            if bip.is_temperature_dependant: 
+                decoded_map[bip.name] = optimization_vector[param_ind : param_ind + degree]
+                param_ind += degree
+            else:
+                decoded_map[bip.name] = optimization_vector[param_ind]
+                param_ind += 1
 
-        return {
-            "polynomial_coeffs_for_temperature_dependant_BIPs": coeffs,
-            "scalars_for_temperature_independant_BIPs": scalars
-        }
+        return decoded_map

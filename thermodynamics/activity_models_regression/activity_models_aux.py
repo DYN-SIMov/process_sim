@@ -55,7 +55,7 @@ class RegressionAuxiliariesMixin():
         
         initial_guess = [] 
         for bip in self.BIPs:
-            if bip.is_regressed:
+            if bip.is_regressed and bip.is_temperature_dependant:
                 initial_guess.append(bip.initial_guess)
         return np.array(initial_guess)
         
@@ -68,7 +68,7 @@ class RegressionAuxiliariesMixin():
 
         bounds_list = []
         for bip in self.BIPs:
-            if bip.is_regressed:
+            if bip.is_regressed and bip.is_temperature_dependant:
                 bounds_list.append(bip.bounds)
 
         bounds_tuple = tuple(bounds_list)
@@ -389,8 +389,6 @@ class NRTLActivityModelRegression(NRTLActivityModel, RegressionAuxiliariesMixin)
                     " --> Fitted NRTL BIP parameters: "
                     f" tau_12 = {result.x[0]:.4f}, "
                     f" tau_21 = {result.x[1]:.4f}, "
-                    f" alpha_12 = {result.x[2]:.4f}, "
-                    f" alpha_21 = {result.x[3]:.4f}. "
                     f" residual = {result.fun:.4e}.")
             
         else:
