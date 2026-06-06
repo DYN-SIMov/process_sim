@@ -78,11 +78,10 @@ class BinaryInteractionParametersRegression():
 
         self.elementwise_opt_results: list = None
         self.regression_results_cache: dict = {}
-        self.regression_method: RegressionMethod = None
+        self.latest_regression_results: list[BinaryInteractionParameter] = None
+        # self.regression_method: RegressionMethod = None
         # self.BIP_polynomial_coeffs: list = None
-        self.goodness_of_fit: float = None
-
-        self.BIP_estimation_results = None
+        # self.goodness_of_fit: float = None
 
         pass
         
@@ -164,7 +163,7 @@ class BinaryInteractionParametersRegression():
             estimation_results=estimation_results
         )
 
-        
+        # NOTE: elementwise regression consider only temperautre dependant BIPs
         bip_names = [bip.name for bip in self.activity_model_backend.BIPs
                       if bip.is_regressed and bip.is_temperature_dependant]
         BIP_estimation_results = {
@@ -433,14 +432,12 @@ class BinaryInteractionParametersRegression():
         return sum(error_data)
 
 
-    def _calculate_goodness_of_fit(self) -> None:
+    def _calculate_goodness_of_fit(self,
+                                   regressed_BIPs: list[BinaryInteractionParameter]) -> float:
         """
         Calculates the goodness of fit (R^2) for the regressed model.
         """
-        if self.BIP_polynomial_coeffs is None:
-            return
-        
-        visualization_data = self._extract_visualization_data()
+        visualization_data = self._extract_visualization_data(regressed_BIPs=regressed_BIPs)
         y1_exp_data_plot = visualization_data['y1_exp_data']
         y1_calc_data_plot = visualization_data['y1_calc_data']
         
@@ -459,7 +456,14 @@ class BinaryInteractionParametersRegression():
 
 
         regressed_BIPs = self._get_updated_BIPs(BIP_estimation_results=BIP_estimation_results)
+        goodness_of_fit = self._calculate_goodness_of_fit(regressed_BIPs=regressed_BIPs)
 
+        self.regression_results_cache[regression_method] = {
+            'regressed_BIPs': regressed_BIPs,
+            'goodness_of_fit': goodness_of_fit
+        }
+
+        self.latest_regression_results = regressed_BIPs
 
         pass 
 
@@ -477,15 +481,21 @@ class BinaryInteractionParametersRegression():
                     value=BIP_estimation_results[bip.name])
                 updated_BIPs.append(updated_BIP)
             else:
-                updated_BIPs.append(bip)
+                updated_BIP = replace_dataclass_field(
+                    bip, 
+                    value=bip.initial_guess)
+                updated_BIPs.append(updated_BIP)
 
         return updated_BIPs
+
 
     def results_visualization(self,
                               get_parity_plot,
                               get_VLE_curve) -> None:
         
-        visualization_data = self._extract_visualization_data()
+        regressed_BIPs = self.latest_regression_results
+ 
+        visualization_data = self._extract_visualization_data(regressed_BIPs=regressed_BIPs)
         y1_exp_data_plot = visualization_data['y1_exp_data']
         y1_calc_data_plot = visualization_data['y1_calc_data']
         x1_exp_data_plot = visualization_data['x1_exp_data']
@@ -493,8 +503,7 @@ class BinaryInteractionParametersRegression():
         y2_calc_elementwise_data_plot = visualization_data['y2_calc_elementwise_data']
         point_indices = visualization_data['point_indices']
 
-        if self.goodness_of_fit is None:
-            self._calculate_goodness_of_fit()
+        goodness_of_fit = self._calculate_goodness_of_fit(regressed_BIPs=regressed_BIPs)
 
         if get_parity_plot is True: 
             plt.figure(figsize=(6,6))
@@ -506,7 +515,7 @@ class BinaryInteractionParametersRegression():
             plt.ylabel(f'Calculated y_{self.VLE_data.components[0]}')
             plt.title(f'Parity Plot for VLE of {self.VLE_data.components[0]} and '
                       f'{self.VLE_data.components[1]} \n'
-                      f'R2 {self.VLE_data.components[0]} =  {self.goodness_of_fit:.3f}')   
+                      f'R2 {self.VLE_data.components[0]} =  {goodness_of_fit:.3f}')   
             plt.xlim(0, 1)
             plt.ylim(0, 1)
             plt.legend()
@@ -559,7 +568,8 @@ class BinaryInteractionParametersRegression():
         pass
 
 
-    def _extract_visualization_data(self) -> dict: 
+    def _extract_visualization_data(self,
+                                    regressed_BIPs: list[BinaryInteractionParameter]) -> dict: 
 
         """
         Method for extracting the data for visualization of regression results.
@@ -630,9 +640,14 @@ class BinaryInteractionParametersRegression():
             saturation_pressure_Pa_2 = saturation_pressure_Pa_2_data[k]
 
             BIP_values = []
-            for j in range(0, len(self.BIP_polynomial_coeffs)):
-                BIP_val = self.polynomial.evaluate(temperature_K = temperature_K,
-                                                   coeffs = self.BIP_polynomial_coeffs[j])
+            for bip in regressed_BIPs:
+                if not bip.is_regressed:
+                    continue
+                if bip.is_temperature_dependant:
+                    BIP_val = self.polynomial.evaluate(temperature_K = temperature_K,
+                                                       coeffs = bip.value)
+                else:
+                    BIP_val = bip.value
                 BIP_values.append(BIP_val)
 
             output = self._estimate_y_calculated(
@@ -656,7 +671,10 @@ class BinaryInteractionParametersRegression():
 
             if self.elementwise_opt_results is not None:
                 pt_idx = point_indices[k]
-                BIP_elementwise_values = self.elementwise_opt_results[pt_idx]
+                BIP_elementwise_values = list(self.elementwise_opt_results[pt_idx])
+                for bip in regressed_BIPs:
+                    if bip.is_regressed and not bip.is_temperature_dependant:
+                        BIP_elementwise_values.append(bip.value)
                 output_elementwise = self._estimate_y_calculated(
                     x1_val = x1_exp,
                     y1_val = y1_exp,
