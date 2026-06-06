@@ -27,6 +27,7 @@ from optimization import PymooCallbackHandler, Callback
 from data_handling import VLEData
 
 from optimization import PymooPolynomialEstimator
+from optimization import OptimizationVectorMapper
 from optimization import OwnBiasedSampling
 
 from typing import Type
@@ -55,22 +56,29 @@ class BinaryInteractionParametersRegression():
         pure_component_data_backend = PureComponentDataBackend(
             components=self.VLE_data.components
         )
+
         self.eos_backend = equation_of_state(
             components=self.VLE_data.components,
             pure_component_data_backend=pure_component_data_backend
         ) if equation_of_state is not None else None
+
         self.activity_model_backend = activity_model_regression(
             components=self.VLE_data.components,
             pure_component_data_backend=pure_component_data_backend
         )
 
-        self.number_of_regressed_parameters = self.activity_model_backend.get_number_of_regressed_parameters()
-        
+        self.parameter_mapper = OptimizationVectorMapper(
+            activity_model=self.activity_model_backend,
+            polynomial=self.polynomial
+        )
+
         self.elementwise_opt_results: list = None
         self.regression_results_cache: dict = {}
         self.regression_method: RegressionMethod = None
-        self.BIP_polynomial_coeffs: list = None
+        # self.BIP_polynomial_coeffs: list = None
         self.goodness_of_fit: float = None
+
+        self.BIP_estimation_results = None
 
         pass
         
@@ -78,13 +86,15 @@ class BinaryInteractionParametersRegression():
     def estimate_polynomial_elementwise(self) -> None:
 
         " Method for regressing BIP parameters for each T-x-y point individually and then "
-        " regressing the polynomial coefficients based on the results of elementwise regression. " 
+        " regressing the polynomial coefficients based on the results of elementwise regression. "
+        " The elementwise regression does not consider potential variation in temperature dependant "
+        " BIPs - they are considered as constants (based on the initial guess value provided)" 
 
         self._regress_BIP_parameters_elementwise()
         self._estimate_polynomial_from_elementwise_optimisation()
 
         pass
-     
+
 
     def _regress_BIP_parameters_elementwise(self) -> None:
         " Function to regress Wilson BIP parameters for each temperature point "
@@ -173,10 +183,6 @@ class BinaryInteractionParametersRegression():
         " Method for regressing parameters directly from VLE data "
         activity_model = self.activity_model_backend
 
-        scipy_bounds = self.polynomial.get_bounds_scipy()
-        lower_bounds = [bound[0] for bound in scipy_bounds] * self.number_of_regressed_parameters
-        upper_bounds = [bound[1] for bound in scipy_bounds] * self.number_of_regressed_parameters
-
         if is_memetic: 
             memetic_callback = PymooCallbackHandler(
                 n_gens_skipped=20, 
@@ -188,14 +194,11 @@ class BinaryInteractionParametersRegression():
             memetic_callback = Callback()
 
         problem = PymooPolynomialEstimator(
-            number_of_parameters=len(lower_bounds),
             n_jobs=n_jobs,
             objective_function=self._objective_function_from_VLE,
-            lower_bounds=lower_bounds,
-            upper_bounds=upper_bounds,
             VLE_data=self.VLE_data,
             polynomial=self.polynomial,
-            number_of_regressed_parameters=self.number_of_regressed_parameters
+            parameter_mapper=self.parameter_mapper
         )
 
         if use_biased_initialization is True: 
@@ -233,8 +236,11 @@ class BinaryInteractionParametersRegression():
             total_residual = results.F[0]
         )
 
-        BIP_coeffs = results.X.reshape((self.number_of_regressed_parameters, 
-                                        self.polynomial.degree))
+
+        BIP_coeffs = self.parameter_mapper.decode_pymoo_vector(
+            optimization_vector=results.X
+        )
+        
         BIP_polynomial_coeffs = [
             self.polynomial.get_absolute_coeffs(
                 coeffs=BIP_coeffs[k]
@@ -296,7 +302,7 @@ class BinaryInteractionParametersRegression():
         y2_val = 1 - y1_val
         
         gamma_1_calc, gamma_2_calc = self.activity_model_backend.get_activity_coefs(
-            theta = BIP_coeffs,
+            BIP_coeffs = BIP_coeffs,
             x_val = x1_val
         )
 
@@ -382,25 +388,30 @@ class BinaryInteractionParametersRegression():
     def _objective_function_from_VLE(self,
                                      coeffs: np.ndarray,
                                      polynomial,
-                                     VLE_data,
-                                     number_of_regressed_parameters) -> float:
+                                     VLE_data) -> float:
 
-        param_coeffs = coeffs.reshape(
-            (number_of_regressed_parameters, polynomial.degree)
+        decoded_params = self.parameter_mapper.decode_pymoo_vector(
+            optimization_vector=coeffs
         )
+
+        param_coeffs = decoded_params['polynomial_coeffs_for_temperature_dependant_BIPs']
+        scalars = decoded_params['scalars_for_temperature_independant_BIPs']
         
         error_data = []
         for T_x_y_point in VLE_data.T_x_y_points:
-            theta = []
+            
+            BIP_esitmates = []
+            for k in range(len(param_coeffs)):
+                BIP_ij_calc = polynomial.evaluate(temperature_K = T_x_y_point.temperature_K,
+                                                  coeffs = param_coeffs[k])
+                BIP_esitmates.append(BIP_ij_calc)
 
-            BIP_12_calc = polynomial.evaluate(temperature_K = T_x_y_point.temperature_K,
-                                            coeffs = param_coeffs[0])
-            BIP_21_calc = polynomial.evaluate(temperature_K = T_x_y_point.temperature_K,
-                                            coeffs = param_coeffs[1])
-            theta = np.array([BIP_12_calc, BIP_21_calc])
+            for k in range(len(scalars)):
+                BIP_esitmates.append(scalars[k])
+            
 
             error_val = self._objective_function_elementwise(
-                theta = theta,
+                theta = BIP_esitmates,
                 regression_params = {
                     'x1': np.array([point.x1_mol_frac for point in T_x_y_point.data]),
                     'y1': np.array([point.y1_mol_frac for point in T_x_y_point.data]),
@@ -447,6 +458,20 @@ class BinaryInteractionParametersRegression():
             'BIP_polynomial_coeffs': BIP_polynomial_coeffs,
             'goodness_of_fit': self.goodness_of_fit
         }
+
+
+        ##################################################################
+
+        BIP_estimates = [] 
+
+        BIP_estimates = self.activity_model_backend.BIPs
+
+    
+
+
+
+
+
 
 
     def results_visualization(self,

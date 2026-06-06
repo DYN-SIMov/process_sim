@@ -17,7 +17,7 @@ class BinaryInteractionParameter():
     value: float
     initial_guess: float
     bounds: tuple
-    temperature_dependant: bool
+    is_temperature_dependant: bool
     is_regressed: bool 
 
 
@@ -76,18 +76,46 @@ class RegressionAuxiliariesMixin():
         return bounds_tuple
     
 
-    def get_number_of_regressed_parameters(self) -> int:
+    def get_temp_dependant_BIPs(self) -> list[BinaryInteractionParameter]:
 
         """
-        Method to get number of regressed parameters for Wilson activity model
+        Method to get list of temperature dependant regressed parameters for Wilson activity model
         """
 
-        number_of_parameters = 0
+        temp_dependant_BIPs = []
+        for bip in self.BIPs:
+            if bip.is_regressed and bip.is_temperature_dependant:
+                temp_dependant_BIPs.append(bip)
+
+        return temp_dependant_BIPs
+    
+
+    def get_temp_independant_BIPs(self) -> list[BinaryInteractionParameter]:
+
+        """
+        Method to get list of temperature independant regressed parameters for Wilson activity model
+        """
+
+        temp_independant_BIPs = []
+        for bip in self.BIPs:
+            if bip.is_regressed and not bip.is_temperature_dependant:
+                temp_independant_BIPs.append(bip)
+
+        return temp_independant_BIPs
+    
+
+    def get_bip_index_map(self) -> dict:
+        """
+        Creates a map of index positions for parameters as they will 
+        appear in the 1D regression vector.
+        """
+        index_map = {}
+        idx = 0
         for bip in self.BIPs:
             if bip.is_regressed:
-                number_of_parameters += 1
-
-        return number_of_parameters
+                index_map[bip.name] = idx
+                idx += 1
+        return index_map
         
     
 
@@ -105,7 +133,7 @@ class WilsonActivityModelRegression(WilsonActivityModel, RegressionAuxiliariesMi
             value=None,
             initial_guess=1.0,
             bounds=(1e-3, None),
-            temperature_dependant=True,
+            is_temperature_dependant=True,
             is_regressed=True
         )
         lambda_21 = BinaryInteractionParameter(
@@ -113,25 +141,26 @@ class WilsonActivityModelRegression(WilsonActivityModel, RegressionAuxiliariesMi
             value=None,
             initial_guess=1.0,
             bounds=(1e-3, None),
-            temperature_dependant=True,
+            is_temperature_dependant=True,
             is_regressed=True
         )
 
         self.BIPs = [lambda_12, lambda_21]
+        self._BIP_index_map = self.get_bip_index_map()
 
         pass
 
 
-    @staticmethod
-    def get_activity_coefs(theta: np.ndarray,
+    def get_activity_coefs(self, 
+                           BIP_coeffs: np.ndarray,
                            x_val: np.ndarray) -> np.ndarray:
 
         """
         Method to get activity coeffcients (gamma_1 and gamma_2) based on Wilson equation
         """
 
-        lambda_12 = theta[0]
-        lambda_21 = theta[1]
+        lambda_12 = BIP_coeffs[self._BIP_index_map['Lambda_12']]
+        lambda_21 = BIP_coeffs[self._BIP_index_map['Lambda_21']]
 
         x_1 = x_val
         x_2 = 1 - x_val
@@ -247,7 +276,7 @@ class NRTLActivityModelRegression(NRTLActivityModel, RegressionAuxiliariesMixin)
             value=None,
             initial_guess=1.0,
             bounds=(1e-3, None),
-            temperature_dependant=True,
+            is_temperature_dependant=True,
             is_regressed=True
         )
 
@@ -256,7 +285,7 @@ class NRTLActivityModelRegression(NRTLActivityModel, RegressionAuxiliariesMixin)
             value=None,
             initial_guess=1.0,
             bounds=(1e-3, None),
-            temperature_dependant=True,
+            is_temperature_dependant=True,
             is_regressed=True
         )
 
@@ -265,7 +294,7 @@ class NRTLActivityModelRegression(NRTLActivityModel, RegressionAuxiliariesMixin)
             value=alpha if alpha_is_fixed else None,
             initial_guess=alpha,
             bounds=None if alpha_is_fixed else (1e-3, 0.5),
-            temperature_dependant=False,
+            is_temperature_dependant=False,
             is_regressed=False if alpha_is_fixed else True
         )
 
@@ -274,32 +303,33 @@ class NRTLActivityModelRegression(NRTLActivityModel, RegressionAuxiliariesMixin)
             value=alpha if alpha_is_fixed else None,
             initial_guess=alpha,
             bounds=None if alpha_is_fixed else (1e-3, 0.5),
-            temperature_dependant=False,
+            is_temperature_dependant=False,
             is_regressed=False if alpha_is_fixed else True
         )
 
         self.BIPs = [tau_12, tau_21, alpha_12, alpha_21]
+        self._BIP_index_map = self.get_bip_index_map()
         
 
 
 
     def get_activity_coefs(self, 
-                           theta: np.ndarray,
+                           BIP_coeffs: np.ndarray,
                            x_val: np.ndarray) -> np.ndarray:
 
         """
         Method to get activity coeffcients (gamma_1 and gamma_2) based on NRTL equation
         """
 
-        tau_12 = theta[0]
-        tau_21 = theta[1]
+        tau_12 = BIP_coeffs[self._BIP_index_map['tau_12']]
+        tau_21 = BIP_coeffs[self._BIP_index_map['tau_21']]
 
         if self.alpha_is_fixed:
             alpha_12 = self.alpha
             alpha_21 = self.alpha
         else:
-            alpha_12 = theta[2]
-            alpha_21 = theta[3]
+            alpha_12 = BIP_coeffs[self._BIP_index_map['alpha_12']]
+            alpha_21 = BIP_coeffs[self._BIP_index_map['alpha_21']]
 
         x_1 = x_val
         x_2 = 1 - x_val

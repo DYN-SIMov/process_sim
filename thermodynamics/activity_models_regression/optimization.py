@@ -428,24 +428,27 @@ class PolynomialElementwiseEstimator():
 
 
 class PymooPolynomialEstimator(Problem):
+    
     def __init__(self, 
-                 number_of_parameters,
-                 lower_bounds,
-                 upper_bounds, 
+                 parameter_mapper, 
                  objective_function,
                  VLE_data,
                  polynomial,
-                 number_of_regressed_parameters,
                  n_jobs = 1,
                  backend = 'loky', 
                  **kwargs):
         
+        self.parameter_mapper = parameter_mapper
         self.objective_function = objective_function
         self.VLE_data = VLE_data
         self.polynomial = polynomial
-        self.number_of_regressed_parameters = number_of_regressed_parameters
         self.n_jobs = n_jobs
         self.backend = backend
+
+        config = self.parameter_mapper.get_pymoo_config()
+        number_of_parameters = config['number_of_parameters']
+        lower_bounds = config['lower_bounds']
+        upper_bounds = config['upper_bounds']
 
         super().__init__(
             n_var=number_of_parameters,
@@ -473,8 +476,7 @@ class PymooPolynomialEstimator(Problem):
                 objective_function_val = self.objective_function(
                     coeffs=coeffs,
                     VLE_data=self.VLE_data,
-                    polynomial=self.polynomial,
-                    number_of_regressed_parameters=self.number_of_regressed_parameters
+                    polynomial=self.polynomial
                 )
                 return objective_function_val
             
@@ -707,3 +709,69 @@ class OwnBiasedSampling(FloatRandomSampling):
 
         return population
                 
+
+
+class OptimizationVectorMapper(): 
+
+    def __init__(self,
+                 activity_model,
+                 polynomial):
+        self.activity_model = activity_model
+        self.polynomial = polynomial
+
+        self.temp_dep_bips = self.activity_model.get_temp_dependant_BIPs()
+        self.temp_indep_bips = self.activity_model.get_temp_independant_BIPs()
+
+        pass
+
+    def get_pymoo_config(self) -> dict: 
+
+        temp_dep_BIPs = self.temp_dep_bips
+        temp_indep_BIPs = self.temp_indep_bips
+
+        lower_bounds = []
+        upper_bounds = []
+
+        for bip in temp_dep_BIPs:
+            bounds = self.polynomial.get_bounds_scipy()
+            lower_bounds.extend([bound[0] for bound in bounds])
+            upper_bounds.extend([bound[1] for bound in bounds])
+
+        for bip in temp_indep_BIPs:
+            lower_bounds.append(bip.bounds[0])
+            upper_bounds.append(bip.bounds[1])
+
+        number_of_parameters = len(lower_bounds)
+
+        config = {
+            'number_of_parameters': number_of_parameters,
+            'lower_bounds': lower_bounds,
+            'upper_bounds': upper_bounds
+        }
+
+        return config
+
+
+    def decode_pymoo_vector(self, optimization_vector) -> dict: 
+
+        coeffs = []
+        scalars = []
+        param_ind = 0
+        degree = self.polynomial.degree
+
+        temp_dep_bips = self.temp_dep_bips
+        for bip in temp_dep_bips: 
+            coeffs.append(
+                optimization_vector[param_ind : param_ind + degree]
+            )
+            param_ind += degree
+
+        temp_indep_bips = self.temp_indep_bips
+        for bip in temp_indep_bips:
+            scalars.append(optimization_vector[param_ind])
+            param_ind += 1
+
+        return {
+            "polynomial_coeffs_for_temperature_dependant_BIPs": coeffs,
+            "scalars_for_temperature_independant_BIPs": scalars
+        }
