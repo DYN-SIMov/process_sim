@@ -666,17 +666,31 @@ class PymooCallbackHandler(Callback):
 class OwnBiasedSampling(FloatRandomSampling):
 
     def __init__(self,
-                 initial_guess: np.ndarray,
+                 BIP_config: list,
                  fraction_of_biased_samples: float = 0.5,
                  bias_strength: float = 0.5,
                  seed: int = 42):
         super().__init__()
-        self.initial_guess = initial_guess
+        self.BIP_config = BIP_config
         self.fraction_of_biased_samples = fraction_of_biased_samples
         self.bias_strength = bias_strength
         self.seed = seed
 
         self.random_engine = np.random.default_rng(seed=self.seed)
+        self.initial_guess = self._get_initial_guess()
+
+
+    def _get_initial_guess(self) -> np.ndarray:
+
+        initial_guess = []
+        for bip in self.BIP_config:
+            if bip.is_regressed and bip.is_temperature_dependant:
+                initial_guess.extend(bip.value)
+            elif bip.is_regressed and not bip.is_temperature_dependant:
+                initial_guess.append(bip.value)
+
+        return np.array(initial_guess)
+
 
     def _do(self, 
             problem, 
@@ -746,8 +760,9 @@ class OptimizationVectorMapper():
                 continue
 
             if bip.is_temperature_dependant:
-                lower_bounds.extend(self.polynomial.get_bounds_scipy()[0])
-                upper_bounds.extend(self.polynomial.get_bounds_scipy()[1])
+                bounds_tuple = self.polynomial.get_bounds_scipy()
+                lower_bounds.extend([bounds_tuple[k][0] for k in range(len(bounds_tuple))])
+                upper_bounds.extend([bounds_tuple[k][1] for k in range(len(bounds_tuple))])
             else:
                 lower_bounds.append(bip.bounds[0])
                 upper_bounds.append(bip.bounds[1])
