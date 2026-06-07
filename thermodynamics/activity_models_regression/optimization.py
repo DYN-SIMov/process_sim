@@ -185,7 +185,7 @@ class NormalizedForm(PolynominalFormInterface):
 class PolynomialExponentialDIPPR(PolynomialInterface): 
 
     " 4 parameter DIPPR-style polynomial for BIP: "
-    " Lambda_ij = exp(A + B/T + C*ln(T) + D*T). "
+    " BIP = exp(A + B/T + C*ln(T) + D*T). "
     " Based on simplified version of the polynomial form described in docs "
     " of thermo python library (thermo.Wilson). "
 
@@ -241,7 +241,7 @@ class PolynomialExponentialDIPPR(PolynomialInterface):
 class PolynomialNRTL(PolynomialInterface): 
 
     " 4 parameter polynominal for NRTL model: "
-    " Lambda_ij = exp(A + B/T + C*ln(T) + D*T). "
+    " BIP = A + B/T + C*ln(T) + D*T. "
     " Based on simplified version of the polynomial form described in docs "
     " of thermo python library (thermo.Wilson). "
 

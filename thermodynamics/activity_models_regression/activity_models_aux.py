@@ -116,8 +116,96 @@ class RegressionAuxiliariesMixin():
                 index_map[bip.name] = idx
                 idx += 1
         return index_map
-        
-    
+
+
+    def get_message_elementwise(self,
+                                regression_params: dict,
+                                components: list[str],
+                                result) -> None:
+
+        temperature_K = regression_params['temperature_K']
+        pressure_atm  = np.divide(regression_params['pressure_Pa'], 1e5)
+        x1_val = regression_params['x1']
+        y1_val = regression_params['y1']
+
+        if result.success:
+
+            if len(pressure_atm) > 1:
+                press_msg = f"P range = {min(pressure_atm):.2f} - {max(pressure_atm):.2f} atm, "
+                comp_msg  = f"x_{components[0]} range = {min(x1_val):.3f} - {max(x1_val):.3f}, " \
+                            f"y_{components[0]} range = {min(y1_val):.3f} - {max(y1_val):.3f}"
+            elif len(pressure_atm) == 1:
+                press_msg = f"P = {pressure_atm[0]:.2f} atm, "
+                comp_msg  = f"x_{components[0]} = {x1_val[0]:.3f}, y_{components[0]} = {y1_val[0]:.3f}"
+            else:
+                raise ValueError(" Either pressure or component data array is empty. ")
+
+            fitted_bips = self.get_temp_dependant_BIPs()
+            bip_strs = [f"{bip.name} = {result.x[i]:.4f}" for i, bip in enumerate(fitted_bips)]
+            bip_msg = ", ".join(bip_strs)
+
+            model_name = self.__class__.__name__
+            msg = (f"[{model_name}] T = {temperature_K:.2f} K, " + press_msg + comp_msg + "\n" +
+                   f" --> Fitted BIP parameters:  {bip_msg}. "
+                   f" residual = {result.fun:.4e}.")
+
+        else:
+            model_name = self.__class__.__name__
+            msg = (f"[{model_name}] BIP parameters regression did not converge: "
+                   f" {result.message} ")
+
+        print(msg)
+
+
+    def get_polynomial_coeffs_estimation_message(self, estimation_results: list, polynomial) -> None:
+
+        model_name = self.__class__.__name__
+        poly_name = polynomial.__class__.__name__
+        poly_equation = polynomial.polynomial.equation_str
+        letters = 'ABCDEFGHIJKLMNOP'
+        temp_bips = self.get_temp_dependant_BIPs()
+        bip_msgs = []
+        for bip, res in zip(temp_bips, estimation_results):
+            coeff_strs = [f"{letters[i]} = {res.x[i]:.4f}" for i in range(len(res.x))]
+            bip_msgs.append(
+                f" Fitted coefficients for {bip.name}: " + ", ".join(coeff_strs) +
+                f". Residual = {res.fun:.4e}. "
+            )
+        msg = (f"\n [{model_name}] Polynomial regression of BIP parameters converged successfully. \n"
+               f" Polynomial: {poly_name} ({poly_equation}). \n"
+               + "\n".join(bip_msgs))
+        print(colored(msg, 'green'))
+
+
+    def get_message_estimation_from_VLE(self,
+                                         decoded_bip_data: dict,
+                                         polynomial,
+                                         total_residual: float) -> None:
+
+        model_name = self.__class__.__name__
+        poly_name = polynomial.__class__.__name__
+        poly_equation = polynomial.polynomial.equation_str
+        letters = 'ABCDEFGHIJKLMNOP'
+        bip_msgs = []
+        for bip in self.BIPs:
+            if not bip.is_regressed:
+                continue
+            if bip.is_temperature_dependant:
+                coeffs = decoded_bip_data[bip.name]
+                coeff_strs = [f"{letters[i]} = {coeffs[i]:.4f}" for i in range(len(coeffs))]
+                bip_msgs.append(
+                    f" Fitted coefficients for {bip.name}: " + ", ".join(coeff_strs) + ". "
+                )
+            else:
+                bip_msgs.append(
+                    f" Fitted value for {bip.name}: {decoded_bip_data[bip.name]:.4f}. "
+                )
+        msg = (f"\n [{model_name}] Polynomial regression of BIP parameters converged successfully. \n"
+               f" Polynomial: {poly_name} ({poly_equation}). \n"
+               + "\n".join(bip_msgs) +
+               f"\n Total residual = {total_residual:.4e}. ")
+        print(colored(msg, 'green'))
+
 
 class WilsonActivityModelRegression(WilsonActivityModel, RegressionAuxiliariesMixin):
     
@@ -181,80 +269,6 @@ class WilsonActivityModelRegression(WilsonActivityModel, RegressionAuxiliariesMi
         gamma_2 = np.exp(ln_gamma_2)
 
         return gamma_1, gamma_2
-    
-
-    @staticmethod
-    def get_message_elementwise(regression_params: dict,
-                                components: list[str],
-                                result) -> None:
-        
-        """
-        Method to print a interim results of the elementwise estimation of Wilson activity coefficients
-        """
-
-        temperature_K = regression_params['temperature_K']
-        pressure_atm  = np.divide(regression_params['pressure_Pa'], 1e5)
-        x1_val = regression_params['x1']
-        y1_val = regression_params['y1']
-
-        if result.success:
-
-            if len(pressure_atm) > 1:
-                press_msg = f"P range = {min(pressure_atm):.2f} - {max(pressure_atm):.2f} atm, "
-                comp_msg  = f"x_{components[0]} range = {min(x1_val):.3f} - {max(x1_val):.3f}, " \
-                            f"y_{components[0]} range = {min(y1_val):.3f} - {max(y1_val):.3f}"
-            elif len(pressure_atm) == 1:
-                press_msg = f"P = {pressure_atm[0]:.2f} atm, "
-                comp_msg  = f"x_{components[0]} = {x1_val[0]:.3f}, y_{components[0]} = {y1_val[0]:.3f}"
-            else:
-                raise ValueError(" Either pressure of component data array is empty. ")
-
-            msg = (f"T = {temperature_K:.2f} K, " + 
-                   press_msg + 
-                   comp_msg + "\n" +
-                   " --> Fitted Wilson BIP parameters: "
-                   f" lambda_12 = {result.x[0]:.4f}, "
-                   f" lambda_21 = {result.x[1]:.4f}. "
-                   f" residual = {result.fun:.4e}.")
-            
-        else:
-            msg = (f" BIP parameters regression did not converge: "
-                   f" {result.message} ")
-
-        print(msg)
-
-    
-    @staticmethod
-    def get_polynomial_coeffs_estimation_message(estimation_results: list) -> None:
-        
-        msg = (f"\n Polynomial regression of Wilson BIP parameters converged successfully. \n"
-               f" Fitted coefficients for Lambda_12: A = {estimation_results[0].x[0]:.4f}, "
-               f"B = {estimation_results[0].x[1]:.4f}, C = {estimation_results[0].x[2]:.4f}, "
-               f"D = {estimation_results[0].x[3]:.4f}. Residual = {estimation_results[0].fun:.4e}. "
-               f"\n Fitted coefficients for Lambda_21: A = {estimation_results[1].x[0]:.4f}, " 
-               f"B = {estimation_results[1].x[1]:.4f}, C = {estimation_results[1].x[2]:.4f}, " 
-               f"D = {estimation_results[1].x[3]:.4f}. Residual = {estimation_results[1].fun:.4e}. ")
-        print(colored(msg, 'green'))
-
-
-        pass
-
-
-    @staticmethod
-    def get_message_estimation_from_VLE(coeffs: list,
-                                        total_residual: float) -> None:
-        
-        msg = (f"\n DIPPR 4th order polynomial regression of Wilson BIP parameters converged successfully. \n"
-               f" Fitted coefficients for Lambda_12: A = {coeffs[0]:.4f}, "
-               f"B = {coeffs[1]:.4f}, C = {coeffs[2]:.4f}, D = {coeffs[3]:.4f}. "
-               f"\n Fitted coefficients for Lambda_21: A = {coeffs[4]:.4f}, " 
-               f"B = {coeffs[5]:.4f}, C = {coeffs[6]:.4f}, D = {coeffs[7]:.4f}. "
-               f"\n Total residual = {total_residual:.4e}. ")
-        print(colored(msg, 'green'))
-
-
-        pass
-    
 
 
 
@@ -346,99 +360,4 @@ class NRTLActivityModelRegression(NRTLActivityModel, RegressionAuxiliariesMixin)
         gamma_2 = np.exp(ln_gamma_2)
 
         return gamma_1, gamma_2
-    
-    
-    def get_message_elementwise(self,
-                                regression_params: dict,
-                                components: list[str],
-                                result) -> None:
-        
-        """
-        Method to print a interim results of the elementwise estimation of NRTL activity coefficients
-        """
-
-        temperature_K = regression_params['temperature_K']
-        pressure_atm  = np.divide(regression_params['pressure_Pa'], 1e5)
-        x1_val = regression_params['x1']
-        y1_val = regression_params['y1']
-
-        if result.success:
-
-            if len(pressure_atm) > 1:
-                press_msg = f"P range = {min(pressure_atm):.2f} - {max(pressure_atm):.2f} atm, "
-                comp_msg  = f"x_{components[0]} range = {min(x1_val):.3f} - {max(x1_val):.3f}, " \
-                            f"y_{components[0]} range = {min(y1_val):.3f} - {max(y1_val):.3f}"
-            elif len(pressure_atm) == 1:
-                press_msg = f"P = {pressure_atm[0]:.2f} atm, "
-                comp_msg  = f"x_{components[0]} = {x1_val[0]:.3f}, y_{components[0]} = {y1_val[0]:.3f}"
-            else:
-                raise ValueError(" Either pressure of component data array is empty. ")
-
-            if self.alpha_is_fixed:
-                msg = (f"T = {temperature_K:.2f} K, " + 
-                    press_msg + 
-                    comp_msg + "\n" +
-                    " --> Fitted NRTL BIP parameters: "
-                    f" tau_12 = {result.x[0]:.4f}, "
-                    f" tau_21 = {result.x[1]:.4f}. "
-                    f" residual = {result.fun:.4e}.")
-            else:
-                msg = (f"T = {temperature_K:.2f} K, " + 
-                    press_msg + 
-                    comp_msg + "\n" +
-                    " --> Fitted NRTL BIP parameters: "
-                    f" tau_12 = {result.x[0]:.4f}, "
-                    f" tau_21 = {result.x[1]:.4f}, "
-                    f" residual = {result.fun:.4e}.")
-            
-        else:
-            msg = (f" BIP parameters regression did not converge: "
-                   f" {result.message} ")
-
-        print(msg)
-
-    
-    def get_polynomial_coeffs_estimation_message(self, estimation_results: list) -> None:
-        
-        if self.alpha_is_fixed:
-            msg = (
-                f"\n Polynomial regression of NRTL BIP parameters converged successfully. \n"
-                f" Fitted coefficients for tau_12: A = {estimation_results[0].x[0]:.4f}, "
-                f"B = {estimation_results[0].x[1]:.4f}, C = {estimation_results[0].x[2]:.4f}, "
-                f"D = {estimation_results[0].x[3]:.4f}. Residual = {estimation_results[0].fun:.4e}. "
-                f"\n Fitted coefficients for tau_21: A = {estimation_results[1].x[0]:.4f}, " 
-                f"B = {estimation_results[1].x[1]:.4f}, C = {estimation_results[1].x[2]:.4f}, " 
-                f"D = {estimation_results[1].x[3]:.4f}. Residual = {estimation_results[1].fun:.4e}. "
-            )
-        else: 
-            msg = (
-                " MESSAGE FOR NRTL POLYNOMIAL REGRESSION WITH VARIABLE ALPHA IS NOT IMPLEMENTED YET. "
-            )
-
-        print(colored(msg, 'green'))
-
-
-        pass
-
-
-    def get_message_estimation_from_VLE(self, coeffs: list,
-                                        total_residual: float) -> None:
-        
-        if self.alpha_is_fixed:
-            msg = (
-                f"\n Polynomial regression of NRTL BIP parameters converged successfully. \n"
-                f" Fitted coefficients for tau_12: A = {coeffs[0]:.4f}, "
-                f"B = {coeffs[1]:.4f}, C = {coeffs[2]:.4f}, D = {coeffs[3]:.4f}. "
-                f"\n Fitted coefficients for tau_21: A = {coeffs[4]:.4f}, " 
-                f"B = {coeffs[5]:.4f}, C = {coeffs[6]:.4f}, D = {coeffs[7]:.4f}. "
-                f"\n Total residual = {total_residual:.4e}. "
-            )
-        else: 
-            msg = (
-                " MESSAGE FOR NRTL POLYNOMIAL REGRESSION WITH VARIABLE ALPHA IS NOT IMPLEMENTED YET. "
-            )
-        
-        print(colored(msg, 'green'))
-
-        pass
 

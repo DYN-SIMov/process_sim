@@ -10,27 +10,27 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
                 "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
-                "goodness_of_fit": 0.9997830988206212,
+                "goodness_of_fit": 0.9998147049080418,
                 "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-06T07:53:46.118777"
+                "date_of_entry_creation": "2026-06-07T07:10:47.454820"
             },
             "BIP_data": {
                 "Lambda_12": [
-                    -4679.887442012479,
-                    -9999.99999998909,
-                    976.5146928558895,
-                    -2.893916844017914
+                    -2786.2085476676466,
+                    -9643.179091510661,
+                    586.2367342576916,
+                    -1.7755791155184668
                 ],
                 "Lambda_21": [
-                    1623.0088224439305,
-                    8076.2322608407085,
-                    -344.9036330514514,
-                    1.0698207488773779
+                    1157.0960552246706,
+                    9999.999998617688,
+                    -251.23100462562405,
+                    0.8175548749284655
                 ]
             }
         },
@@ -44,27 +44,27 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
                 "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
-                "goodness_of_fit": 0.9997830988206212,
+                "goodness_of_fit": 0.9998147049080418,
                 "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-06T07:53:46.118777"
+                "date_of_entry_creation": "2026-06-07T07:10:47.454820"
             },
             "BIP_data": {
                 "Lambda_12": [
-                    -4679.887442012479,
-                    -9999.99999998909,
-                    976.5146928558895,
-                    -2.893916844017914
+                    -2786.2085476676466,
+                    -9643.179091510661,
+                    586.2367342576916,
+                    -1.7755791155184668
                 ],
                 "Lambda_21": [
-                    1623.0088224439305,
-                    8076.2322608407085,
-                    -344.9036330514514,
-                    1.0698207488773779
+                    1157.0960552246706,
+                    9999.999998617688,
+                    -251.23100462562405,
+                    0.8175548749284655
                 ]
             }
         },
@@ -223,7 +223,7 @@
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-06-07T06:37:27.344779"
+                "date_of_entry_creation": "2026-06-07T07:41:47.983077"
             },
             "BIP_data": {
                 "tau_12": [
@@ -259,7 +259,7 @@
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-06-07T06:37:27.344779"
+                "date_of_entry_creation": "2026-06-07T07:41:47.983077"
             },
             "BIP_data": {
                 "tau_12": [

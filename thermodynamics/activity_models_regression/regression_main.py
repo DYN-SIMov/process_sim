@@ -18,7 +18,7 @@ def main():
 
     VLE_data = VLEData(
         filepath = 'thermodynamics/activity_models_regression/thermo_data/' \
-        'VLE_MeOH_H2O.csv'
+        'VLE_H2O_NH3.csv'
     )
     
     nrtl_varying_alpha = partial(NRTLActivityModelRegression, alpha_is_fixed=False, alpha=0.3)

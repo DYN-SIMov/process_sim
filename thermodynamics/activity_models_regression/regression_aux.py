@@ -34,7 +34,6 @@ from optimization import OwnBiasedSampling
 from typing import Type
 from enum import Enum
 
-from dataclasses import dataclass
 from dataclasses import replace as replace_dataclass_field
 
 
@@ -157,7 +156,8 @@ class BinaryInteractionParametersRegression():
         )
         estimation_results = elementwise_estimator.estimate_coefficients()
         self.activity_model_backend.get_polynomial_coeffs_estimation_message(
-            estimation_results=estimation_results
+            estimation_results=estimation_results,
+            polynomial=self.polynomial
         )
 
         # NOTE: elementwise regression considers only temperature dependant BIPs
@@ -236,13 +236,14 @@ class BinaryInteractionParametersRegression():
             callback=memetic_callback
         )
 
-        activity_model.get_message_estimation_from_VLE(
-            coeffs = results.X,
-            total_residual = results.F[0]
-        )
-
         BIP_data_vect = self.parameter_mapper.decode_pymoo_vector(
             optimization_vector=results.X
+        )
+
+        activity_model.get_message_estimation_from_VLE(
+            decoded_bip_data=BIP_data_vect,
+            polynomial=self.polynomial,
+            total_residual=results.F[0]
         )
         
         bip_names = [bip.name for bip in self.activity_model_backend.BIPs
