@@ -741,6 +741,16 @@ class OptimizationVectorMapper():
 
     def elementwise_regression_adapter(self, optimization_vector: np.ndarray) -> np.ndarray:
 
+        """  
+        This method is needed to adapt the input for the activity calculation regression for 
+        elementwise objective function WHEN the regressed parameters include both 
+        temperature-dependant and temperature-independant BIPs. 
+
+        Since elementwise regression does not consider temperature independant parameters, values of 
+        temperature independant BIPs are taken from the initial guess and appended to the 
+        optimization vector to make it compatible with the activity coefficients calculation.
+        """
+
         if len(optimization_vector) == len(self.temp_dep_bips) + len(self.temp_indep_bips):
             return optimization_vector
         

@@ -160,7 +160,7 @@ class RegressionAuxiliariesMixin():
     def get_polynomial_coeffs_estimation_message(self, estimation_results: list, polynomial) -> None:
 
         model_name = self.__class__.__name__
-        poly_name = polynomial.__class__.__name__
+        poly_name = polynomial.polynomial.__class__.__name__
         poly_equation = polynomial.polynomial.equation_str
         letters = 'ABCDEFGHIJKLMNOP'
         temp_bips = self.get_temp_dependant_BIPs()
@@ -183,7 +183,7 @@ class RegressionAuxiliariesMixin():
                                          total_residual: float) -> None:
 
         model_name = self.__class__.__name__
-        poly_name = polynomial.__class__.__name__
+        poly_name = polynomial.polynomial.__class__.__name__
         poly_equation = polynomial.polynomial.equation_str
         letters = 'ABCDEFGHIJKLMNOP'
         bip_msgs = []

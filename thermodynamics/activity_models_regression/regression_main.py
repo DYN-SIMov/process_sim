@@ -18,13 +18,13 @@ def main():
 
     VLE_data = VLEData(
         filepath = 'thermodynamics/activity_models_regression/thermo_data/' \
-        'VLE_H2O_NH3.csv'
+        'VLE_MeOH_H2O.csv'
     )
     
-    nrtl_varying_alpha = partial(NRTLActivityModelRegression, alpha_is_fixed=False, alpha=0.3)
+    nrtl_varying_alpha = partial(NRTLActivityModelRegression, alpha_is_fixed=False, alpha=0.2)
 
     BIP_estimator = BinaryInteractionParametersRegression(
-        activity_model_regression=nrtl_varying_alpha,
+        activity_model_regression=NRTLActivityModelRegression,
         equation_of_state=SoaveRedlichKwongEoSBackend,
         VLE_data=VLE_data,
         polynomial=PolynomialNRTL(degree=4),
@@ -57,6 +57,7 @@ if __name__ == "__main__":
 
 """
 TODO: 
-1) check the water-ammonia issue with NRTL
-2) improve NRTL model regression for varying alpha
+1) 
+
+
 """

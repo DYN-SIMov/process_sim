@@ -3,15 +3,12 @@ import matplotlib.pyplot as plt
 
 from scipy.optimize import minimize as sp_minimize        # for regression 
 from scipy.stats import linregress                        # for R2 calculation
-from termcolor import colored                             # for colored text output
 
 # for regression of DIPPR parameters directly from VLE data
 from pymoo.core.problem import Problem
 from pymoo.core.population import Population
 from pymoo.algorithms.soo.nonconvex.ga import GA, FloatRandomSampling
 from pymoo.optimize import minimize as pymoo_minimize
-from joblib import Parallel as JoblibParallel
-from joblib import delayed as joblib_delayed
 
 import sys
 import os
