@@ -1,5 +1,4 @@
 {
     "python.defaultInterpreterPath": "/Users/maksimov.ps95/Desktop/python/python_venvs/synloop_venv/bin/python",
-    "python-envs.defaultEnvManager": "ms-python.python:system",
-    "python-envs.pythonProjects": []
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }

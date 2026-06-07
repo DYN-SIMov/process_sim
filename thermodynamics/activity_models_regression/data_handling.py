@@ -9,6 +9,7 @@ from termcolor import colored        # for colored text output
 from CoolProp.CoolProp import PropsSI
 from chemicals import CAS_from_any
 
+from thermo import Chemical
 
 class VLEDataError(Exception):
     pass
@@ -213,10 +214,10 @@ class VLEData():
     
         """ 
         The method's objectives are twofold: 
-        1) get saturation pressures (in Pa) for each component at each value of the temperature in the avaialble VLE data set
-        using CoolProp library 
-        2) filter out VLE data points at temperatures for which saturation pressure could not have been evaluated 
-        (typically when VLE temperature point is above component's critical temperature)
+        1) get saturation pressures (in Pa) for each component at each value of the temperature 
+        in the available VLE data
+        2) filter out VLE data points at temperatures for which saturation pressure could not 
+        have been evaluated 
         """
 
         T_x_y_points_to_remove = []
@@ -225,20 +226,101 @@ class VLEData():
 
             temperature_K = T_x_y_point.temperature_K
 
-            try: 
-                saturation_pressure_Pa_1 = PropsSI('P','T',temperature_K,'Q',1,CAS_from_any(self.components[0]))
-                saturation_pressure_Pa_2 = PropsSI('P','T',temperature_K,'Q',1,CAS_from_any(self.components[1]))
+            saturation_pressure_Pa_data = []
+            for component in self.components:
+                saturation_pressure_Pa = self._get_saturation_pressure_value(
+                    component_name=component,
+                    temperature_K=temperature_K
+                )
+                saturation_pressure_Pa_data.append(saturation_pressure_Pa)
 
-                T_x_y_point.comp_1_saturation_pressure_Pa = saturation_pressure_Pa_1
-                T_x_y_point.comp_2_saturation_pressure_Pa = saturation_pressure_Pa_2
-            except ValueError:
-                msg = (f"Data import [warning]: "
-                       f" Saturation pressure calculation failed for T = {temperature_K:.2f} K. "
-                       f" Skipping this data point." 
-                       f" Check if critical temperature is exceeded or if components are not supported by CoolProp. ")
-                print(colored(msg, 'yellow'))
+            if any(np.isnan(saturation_pressure_Pa_data)):
                 T_x_y_points_to_remove.append(T_x_y_point)
-                continue
+            else: 
+                T_x_y_point.comp_1_saturation_pressure_Pa = saturation_pressure_Pa_data[0]
+                T_x_y_point.comp_2_saturation_pressure_Pa = saturation_pressure_Pa_data[1]
 
         for T_x_y_point in T_x_y_points_to_remove:
             self.T_x_y_points.remove(T_x_y_point)
+
+
+    def _get_saturation_pressure_value(self, 
+                                       component_name: str,
+                                       temperature_K: float) -> float:
+        
+        [saturation_pressure_Pa, success] = self._get_saturation_pressure_Thermo(
+            component_name=component_name,
+            temperature_K=temperature_K
+        )
+
+        if not success: 
+            msg = ("Attempting to get saturation pressure using CoolProp library as fallback. ")
+            print(colored(msg, 'yellow'))
+            [saturation_pressure_Pa, success] = self._get_saturation_pressure_CoolProp(
+                component_name=component_name,
+                temperature_K=temperature_K
+            )
+
+        return saturation_pressure_Pa
+        
+
+    def _get_saturation_pressure_Thermo(self, 
+                                        component_name: str,
+                                        temperature_K: float) -> tuple[float, bool]:
+        
+        try:
+            component = Chemical(CAS_from_any(component_name), T=temperature_K)
+            saturation_pressure_Pa = component.Psat
+            success = True
+        except ValueError:
+            msg = (f"Data import [warning]: "
+                   f" Saturation pressure calculation failed for T = {temperature_K:.2f} K and "
+                   f" component {component_name} for Thermo library. Check if component is "
+                   f" supported by Thermo package. ")
+            print(colored(msg, 'yellow'))
+            success = False
+            return [float('nan'), success]
+
+        vp = component.VaporPressure
+        if temperature_K < vp.Tmin or temperature_K > vp.Tmax:  
+            msg = (f"Data import [warning]: "
+                    f" temperature T = {temperature_K:.2f} K is out of valid range for"
+                    f" saturation pressure calculation for component {component_name} "
+                    f" using Thermo library. Valid range is {vp.Tmin:.2f} K to {vp.Tmax:.2f} K." 
+            )
+            print(colored(msg, 'yellow'))   
+
+            skip_data_point_input = input(" Do you want to skip this data point? (y/n): ")
+            if skip_data_point_input.lower() == 'y':
+                return [float('nan'), success]
+            elif skip_data_point_input.lower() == 'n':    
+                saturation_pressure_Pa = component.Psat
+                return [saturation_pressure_Pa, success]      
+            else: 
+                print(colored(" Invalid input. Skipping this data point by default. ", 'yellow'))
+                return [float('nan'), success]
+
+        return [saturation_pressure_Pa, success]
+    
+
+    def _get_saturation_pressure_CoolProp(self, 
+                             component_name: str,
+                             temperature_K: float) -> tuple[float, bool]:
+        
+        try:
+            saturation_pressure_Pa = PropsSI(
+                'P', 'T', temperature_K, 'Q', 1, CAS_from_any(component_name)
+            )
+            success = True
+            return [saturation_pressure_Pa, success]
+        
+        except ValueError:
+            msg = (f"Data import [warning]: "
+                   f" Saturation pressure calculation failed for T = {temperature_K:.2f} K and "
+                   f" component {component_name} for CoolProp library. Check if component is "
+                   f" supported by CoolProp package or if temperature exceeds the critical"
+                   f" temperature. No fallback available, skipping this data point.")
+            print(colored(msg, 'yellow'))
+            success = False
+            return [float('nan'), success]
+        

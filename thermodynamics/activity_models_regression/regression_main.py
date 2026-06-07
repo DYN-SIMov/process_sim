@@ -12,24 +12,26 @@ from thermodynamics.activity_models_regression.optimization import AbsoluteForm,
 
 from thermodynamics.databases.bip_db_manager import BIPDatabaseManager
 
+from functools import partial
 
 def main():
 
     VLE_data = VLEData(
         filepath = 'thermodynamics/activity_models_regression/thermo_data/' \
-        'VLE_isobaric_MeOH_H2O.csv'
+        'VLE_MeOH_H2O.csv'
     )
     
+    nrtl_varying_alpha = partial(NRTLActivityModelRegression, alpha_is_fixed=False, alpha=0.2)
+
     BIP_estimator = BinaryInteractionParametersRegression(
-        activity_model_regression=WilsonActivityModelRegression,
+        activity_model_regression=NRTLActivityModelRegression,
         equation_of_state=SoaveRedlichKwongEoSBackend,
         VLE_data=VLE_data,
-        polynomial=PolynomialExponentialDIPPR(degree=4),
+        polynomial=PolynomialNRTL(degree=4),
         polynomial_form=AbsoluteForm
     )
 
-    BIP_estimator.regress_BIP_parameters_elementwise()
-    BIP_estimator.estimate_polynomial_from_elementwise_optimisation()
+    BIP_estimator.estimate_polynomial_elementwise()
     BIP_estimator.results_visualization(get_parity_plot=True,
                                         get_VLE_curve=True)
     
@@ -40,7 +42,6 @@ def main():
         BIP_estimator.estimate_polynomial_from_VLE_data(n_jobs=4, is_memetic=True, verbose=True)
         BIP_estimator.results_visualization(get_parity_plot=True,
                                             get_VLE_curve=True)
-        BIP_estimator.compare_regression_methods()
 
 
     save_resuls = input(" Do you want to save the regression results to the database? (y/n): ")
@@ -56,6 +57,7 @@ if __name__ == "__main__":
 
 """
 TODO: 
-1) check the water-ammonia issue with NRTL
-2) improve NRTL model regression for varying alpha
+1) 
+
+
 """

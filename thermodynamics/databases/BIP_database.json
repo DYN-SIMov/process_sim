@@ -10,27 +10,27 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
                 "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
-                "goodness_of_fit": 0.9997830988206212,
+                "goodness_of_fit": 0.9998147049080418,
                 "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-06T07:53:46.118777"
+                "date_of_entry_creation": "2026-06-07T10:33:03.124460"
             },
             "BIP_data": {
                 "Lambda_12": [
-                    -4679.887442012479,
-                    -9999.99999998909,
-                    976.5146928558895,
-                    -2.893916844017914
+                    -2786.2085476676466,
+                    -9643.179091510661,
+                    586.2367342576916,
+                    -1.7755791155184668
                 ],
                 "Lambda_21": [
-                    1623.0088224439305,
-                    8076.2322608407085,
-                    -344.9036330514514,
-                    1.0698207488773779
+                    1157.0960552246706,
+                    9999.999998617688,
+                    -251.23100462562405,
+                    0.8175548749284655
                 ]
             }
         },
@@ -44,27 +44,27 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
                 "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
-                "goodness_of_fit": 0.9997830988206212,
+                "goodness_of_fit": 0.9998147049080418,
                 "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-06T07:53:46.118777"
+                "date_of_entry_creation": "2026-06-07T10:33:03.124460"
             },
             "BIP_data": {
                 "Lambda_12": [
-                    -4679.887442012479,
-                    -9999.99999998909,
-                    976.5146928558895,
-                    -2.893916844017914
+                    -2786.2085476676466,
+                    -9643.179091510661,
+                    586.2367342576916,
+                    -1.7755791155184668
                 ],
                 "Lambda_21": [
-                    1623.0088224439305,
-                    8076.2322608407085,
-                    -344.9036330514514,
-                    1.0698207488773779
+                    1157.0960552246706,
+                    9999.999998617688,
+                    -251.23100462562405,
+                    0.8175548749284655
                 ]
             }
         },
@@ -77,27 +77,28 @@
                 "activity_model": "WilsonActivityModel",
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
-                "goodness_of_fit": 0.998395739541844,
+                "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
+                "goodness_of_fit": 0.998976500429708,
                 "regression_method": "Elementwise regression of each T-x-y point",
                 "VLE_data_source": "Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Description With A Modified Cubic Equation Of State, Smolen, Manley and Poling, 1991",
                 "temperature_lb_K": 293.15,
                 "temperature_ub_K": 413.15,
                 "pressure_lb_Pa": 6300.0,
                 "pressure_ub_Pa": 3099800.0,
-                "date_of_entry_creation": "2026-05-05T08:07:43.841741"
+                "date_of_entry_creation": "2026-06-07T10:39:24.911686"
             },
             "BIP_data": {
-                "Lambda_12": [
-                    0.49294798047697197,
-                    0.12882131860243298,
-                    0.09833238859189072,
-                    0.0006141083865335767
-                ],
                 "Lambda_21": [
-                    -1.911181444208069,
-                    -2.1948170986017206,
-                    1.207308821477985,
-                    -0.013770113717278392
+                    0.6252817609905067,
+                    0.12793905604611883,
+                    0.09941577880181593,
+                    0.00018726365607870017
+                ],
+                "Lambda_12": [
+                    38.85030236582028,
+                    -13.714355805077158,
+                    -7.31147021020926,
+                    0.012423288955169014
                 ]
             }
         },
@@ -110,27 +111,96 @@
                 "activity_model": "WilsonActivityModel",
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialExponentialDIPPR",
-                "goodness_of_fit": 0.998395739541844,
+                "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
+                "goodness_of_fit": 0.998976500429708,
                 "regression_method": "Elementwise regression of each T-x-y point",
                 "VLE_data_source": "Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Description With A Modified Cubic Equation Of State, Smolen, Manley and Poling, 1991",
                 "temperature_lb_K": 293.15,
                 "temperature_ub_K": 413.15,
                 "pressure_lb_Pa": 6300.0,
                 "pressure_ub_Pa": 3099800.0,
-                "date_of_entry_creation": "2026-05-05T08:07:43.841741"
+                "date_of_entry_creation": "2026-06-07T10:39:24.911686"
+            },
+            "BIP_data": {
+                "Lambda_21": [
+                    0.6252817609905067,
+                    0.12793905604611883,
+                    0.09941577880181593,
+                    0.00018726365607870017
+                ],
+                "Lambda_12": [
+                    38.85030236582028,
+                    -13.714355805077158,
+                    -7.31147021020926,
+                    0.012423288955169014
+                ]
+            }
+        },
+        "methanol-n-propanol": {
+            "metadata": {
+                "component1_name": "methanol",
+                "component2_name": "n-propanol",
+                "component1_CAS": "67-56-1",
+                "component2_CAS": "71-23-8",
+                "activity_model": "WilsonActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialExponentialDIPPR",
+                "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
+                "goodness_of_fit": 0.995566185185783,
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
+                "VLE_data_source": "Hill and Winkle,\"Vapor-liquid equilibria of methanol binary systems: methanol-propanol, methanol-butanol and methanol-pentanol, Ind. Eng. Chem. 1952, 44, 1, 205\u2013210, https://doi.org/10.1021/ie50505a056\",,",
+                "temperature_lb_K": 339.84999999999997,
+                "temperature_ub_K": 356.34999999999997,
+                "pressure_lb_Pa": 100000.0,
+                "pressure_ub_Pa": 100000.0,
+                "date_of_entry_creation": "2026-06-07T10:46:07.703429"
             },
             "BIP_data": {
                 "Lambda_12": [
-                    0.49294798047697197,
-                    0.12882131860243298,
-                    0.09833238859189072,
-                    0.0006141083865335767
+                    -4787.933172106321,
+                    -9999.999999455395,
+                    999.9999997026647,
+                    -2.9721717003107564
                 ],
                 "Lambda_21": [
-                    -1.911181444208069,
-                    -2.1948170986017206,
-                    1.207308821477985,
-                    -0.013770113717278392
+                    -2448.7908347356124,
+                    5699.566654626045,
+                    999.9997449173575,
+                    -10.0
+                ]
+            }
+        },
+        "67-56-1-71-23-8": {
+            "metadata": {
+                "component1_name": "methanol",
+                "component2_name": "n-propanol",
+                "component1_CAS": "67-56-1",
+                "component2_CAS": "71-23-8",
+                "activity_model": "WilsonActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialExponentialDIPPR",
+                "polynomial_equation": "BIP = exp(A + B/T + C*ln(T) + D*T)",
+                "goodness_of_fit": 0.995566185185783,
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
+                "VLE_data_source": "Hill and Winkle,\"Vapor-liquid equilibria of methanol binary systems: methanol-propanol, methanol-butanol and methanol-pentanol, Ind. Eng. Chem. 1952, 44, 1, 205\u2013210, https://doi.org/10.1021/ie50505a056\",,",
+                "temperature_lb_K": 339.84999999999997,
+                "temperature_ub_K": 356.34999999999997,
+                "pressure_lb_Pa": 100000.0,
+                "pressure_ub_Pa": 100000.0,
+                "date_of_entry_creation": "2026-06-07T10:46:07.703429"
+            },
+            "BIP_data": {
+                "Lambda_12": [
+                    -4787.933172106321,
+                    -9999.999999455395,
+                    999.9999997026647,
+                    -2.9721717003107564
+                ],
+                "Lambda_21": [
+                    -2448.7908347356124,
+                    5699.566654626045,
+                    999.9997449173575,
+                    -10.0
                 ]
             }
         }
@@ -146,30 +216,30 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialNRTL",
                 "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
-                "goodness_of_fit": 0.9987646933648201,
-                "regression_method": "Elementwise regression of each T-x-y point",
+                "goodness_of_fit": 0.9997372918394216,
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-06T07:49:45.519511"
+                "date_of_entry_creation": "2026-06-07T07:41:47.983077"
             },
             "BIP_data": {
                 "tau_12": [
-                    0.6919061447199054,
-                    0.11633650481910297,
-                    0.10741017701938041,
-                    -0.002647940744136229
+                    94.97332391603568,
+                    -614.8403691507133,
+                    980.8076704405828,
+                    9.105421992770822
                 ],
                 "tau_21": [
-                    0.692576084329888,
-                    0.11630622423282697,
-                    0.10740914415797365,
-                    -0.0027038336430941926
+                    -99.99999999998585,
+                    706.4338124113679,
+                    20.654856820618644,
+                    -0.0632117789010992
                 ],
-                "alpha_12": 0.3,
-                "alpha_21": 0.3
+                "alpha_12": 0.2987131209406445,
+                "alpha_21": 0.5
             }
         },
         "67-56-1-7732-18-5": {
@@ -182,30 +252,174 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialNRTL",
                 "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
-                "goodness_of_fit": 0.9987646933648201,
-                "regression_method": "Elementwise regression of each T-x-y point",
+                "goodness_of_fit": 0.9997372918394216,
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-05-06T07:49:45.519511"
+                "date_of_entry_creation": "2026-06-07T07:41:47.983077"
             },
             "BIP_data": {
                 "tau_12": [
-                    0.6919061447199054,
-                    0.11633650481910297,
-                    0.10741017701938041,
-                    -0.002647940744136229
+                    94.97332391603568,
+                    -614.8403691507133,
+                    980.8076704405828,
+                    9.105421992770822
                 ],
                 "tau_21": [
-                    0.692576084329888,
-                    0.11630622423282697,
-                    0.10740914415797365,
-                    -0.0027038336430941926
+                    -99.99999999998585,
+                    706.4338124113679,
+                    20.654856820618644,
+                    -0.0632117789010992
                 ],
-                "alpha_12": 0.3,
-                "alpha_21": 0.3
+                "alpha_12": 0.2987131209406445,
+                "alpha_21": 0.5
+            }
+        },
+        "methanol-n-propanol": {
+            "metadata": {
+                "component1_name": "methanol",
+                "component2_name": "n-propanol",
+                "component1_CAS": "67-56-1",
+                "component2_CAS": "71-23-8",
+                "activity_model": "NRTLActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialNRTL",
+                "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
+                "goodness_of_fit": 0.9976589926301224,
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
+                "VLE_data_source": "Hill and Winkle,\"Vapor-liquid equilibria of methanol binary systems: methanol-propanol, methanol-butanol and methanol-pentanol, Ind. Eng. Chem. 1952, 44, 1, 205\u2013210, https://doi.org/10.1021/ie50505a056\",,",
+                "temperature_lb_K": 339.84999999999997,
+                "temperature_ub_K": 356.34999999999997,
+                "pressure_lb_Pa": 100000.0,
+                "pressure_ub_Pa": 100000.0,
+                "date_of_entry_creation": "2026-06-07T11:18:39.928640"
+            },
+            "BIP_data": {
+                "tau_12": [
+                    -99.99999972839646,
+                    -1000.0,
+                    659.1856910117854,
+                    -10.0
+                ],
+                "tau_21": [
+                    99.99999946348998,
+                    1000.0,
+                    602.1122479081696,
+                    -10.0
+                ],
+                "alpha_12": 0.032151781792202114,
+                "alpha_21": 0.07785189937791098
+            }
+        },
+        "67-56-1-71-23-8": {
+            "metadata": {
+                "component1_name": "methanol",
+                "component2_name": "n-propanol",
+                "component1_CAS": "67-56-1",
+                "component2_CAS": "71-23-8",
+                "activity_model": "NRTLActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialNRTL",
+                "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
+                "goodness_of_fit": 0.9976589926301224,
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
+                "VLE_data_source": "Hill and Winkle,\"Vapor-liquid equilibria of methanol binary systems: methanol-propanol, methanol-butanol and methanol-pentanol, Ind. Eng. Chem. 1952, 44, 1, 205\u2013210, https://doi.org/10.1021/ie50505a056\",,",
+                "temperature_lb_K": 339.84999999999997,
+                "temperature_ub_K": 356.34999999999997,
+                "pressure_lb_Pa": 100000.0,
+                "pressure_ub_Pa": 100000.0,
+                "date_of_entry_creation": "2026-06-07T11:18:39.928640"
+            },
+            "BIP_data": {
+                "tau_12": [
+                    -99.99999972839646,
+                    -1000.0,
+                    659.1856910117854,
+                    -10.0
+                ],
+                "tau_21": [
+                    99.99999946348998,
+                    1000.0,
+                    602.1122479081696,
+                    -10.0
+                ],
+                "alpha_12": 0.032151781792202114,
+                "alpha_21": 0.07785189937791098
+            }
+        },
+        "ammonia-water": {
+            "metadata": {
+                "component1_name": "water",
+                "component2_name": "ammonia",
+                "component1_CAS": "7732-18-5",
+                "component2_CAS": "7664-41-7",
+                "activity_model": "NRTLActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialNRTL",
+                "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
+                "goodness_of_fit": 0.9984427664451527,
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
+                "VLE_data_source": "Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Description With A Modified Cubic Equation Of State, Smolen, Manley and Poling, 1991",
+                "temperature_lb_K": 293.15,
+                "temperature_ub_K": 413.15,
+                "pressure_lb_Pa": 6300.0,
+                "pressure_ub_Pa": 3099800.0,
+                "date_of_entry_creation": "2026-06-07T11:15:52.920203"
+            },
+            "BIP_data": {
+                "tau_21": [
+                    -62.112840860095076,
+                    -1000.0,
+                    12.85845487795747,
+                    -0.03478505901173855
+                ],
+                "tau_12": [
+                    99.9999996206528,
+                    999.9999747543261,
+                    -16.48221511213424,
+                    0.05394748889568085
+                ],
+                "alpha_21": 0.001000000008367259,
+                "alpha_12": 0.21478055481445457
+            }
+        },
+        "7664-41-7-7732-18-5": {
+            "metadata": {
+                "component1_name": "water",
+                "component2_name": "ammonia",
+                "component1_CAS": "7732-18-5",
+                "component2_CAS": "7664-41-7",
+                "activity_model": "NRTLActivityModel",
+                "eos_backend": "SoaveRedlichKwongEoSBackend",
+                "polynomial": "PolynomialNRTL",
+                "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
+                "goodness_of_fit": 0.9984427664451527,
+                "regression_method": "Direct regression from VLE data using memetic algorithm",
+                "VLE_data_source": "Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Vapor-Liquid Equilibrium Data For The NH3-H2O System And Its Description With A Modified Cubic Equation Of State, Smolen, Manley and Poling, 1991",
+                "temperature_lb_K": 293.15,
+                "temperature_ub_K": 413.15,
+                "pressure_lb_Pa": 6300.0,
+                "pressure_ub_Pa": 3099800.0,
+                "date_of_entry_creation": "2026-06-07T11:15:52.920203"
+            },
+            "BIP_data": {
+                "tau_21": [
+                    -62.112840860095076,
+                    -1000.0,
+                    12.85845487795747,
+                    -0.03478505901173855
+                ],
+                "tau_12": [
+                    99.9999996206528,
+                    999.9999747543261,
+                    -16.48221511213424,
+                    0.05394748889568085
+                ],
+                "alpha_21": 0.001000000008367259,
+                "alpha_12": 0.21478055481445457
             }
         }
     },

@@ -3,15 +3,12 @@ import matplotlib.pyplot as plt
 
 from scipy.optimize import minimize as sp_minimize        # for regression 
 from scipy.stats import linregress                        # for R2 calculation
-from termcolor import colored                             # for colored text output
 
 # for regression of DIPPR parameters directly from VLE data
 from pymoo.core.problem import Problem
 from pymoo.core.population import Population
-from pymoo.algorithms.soo.nonconvex.ga import GA
+from pymoo.algorithms.soo.nonconvex.ga import GA, FloatRandomSampling
 from pymoo.optimize import minimize as pymoo_minimize
-from joblib import Parallel as JoblibParallel
-from joblib import delayed as joblib_delayed
 
 import sys
 import os
@@ -20,6 +17,7 @@ from thermodynamics.core.properties import EquationOfStateInterface
 from thermodynamics.core.properties import PureComponentDataBackend
 
 from activity_models_aux import ActivityModelRegressionInterface
+from activity_models_aux import BinaryInteractionParameter
 from optimization import PolynomialExponentialDIPPR, PolynomialElementwiseEstimator, PolynomialInterface
 from optimization import PolynominalFormInterface, AbsoluteForm, NormalizedForm
 from optimization import PymooCallbackHandler, Callback
@@ -27,9 +25,13 @@ from optimization import PymooCallbackHandler, Callback
 from data_handling import VLEData
 
 from optimization import PymooPolynomialEstimator
+from optimization import OptimizationVectorMapper
+from optimization import OwnBiasedSampling
 
 from typing import Type
 from enum import Enum
+
+from dataclasses import replace as replace_dataclass_field
 
 
 
@@ -54,26 +56,44 @@ class BinaryInteractionParametersRegression():
         pure_component_data_backend = PureComponentDataBackend(
             components=self.VLE_data.components
         )
+
         self.eos_backend = equation_of_state(
             components=self.VLE_data.components,
             pure_component_data_backend=pure_component_data_backend
         ) if equation_of_state is not None else None
+
         self.activity_model_backend = activity_model_regression(
             components=self.VLE_data.components,
             pure_component_data_backend=pure_component_data_backend
         )
-        
+
+        self.parameter_mapper = OptimizationVectorMapper(
+            activity_model=self.activity_model_backend,
+            polynomial=self.polynomial
+        )
+
         self.elementwise_opt_results: list = None
         self.regression_results_cache: dict = {}
-        self.regression_method: RegressionMethod = None
-        self.BIP_polynomial_coeffs: list = None
-        self.goodness_of_fit: float = None
+        self.latest_regression_results: list[BinaryInteractionParameter] = None
 
         pass
         
-     
 
-    def regress_BIP_parameters_elementwise(self) -> None:
+    def estimate_polynomial_elementwise(self) -> None:
+
+        " Method for regressing BIP parameters for each T-x-y point individually and then "
+        " regressing the polynomial coefficients based on the results of elementwise regression. "
+        " The elementwise regression does not consider potential variation in temperature dependant "
+        " BIPs - they are considered as constants (based on the initial guess value provided)" 
+
+        self._regress_BIP_parameters_elementwise()
+        self._estimate_polynomial_from_elementwise_optimisation()
+
+        pass
+
+
+    def _regress_BIP_parameters_elementwise(self,
+                                            verbose: bool = True) -> None:
         " Function to regress Wilson BIP parameters for each temperature point "
         " (i.e., data_set) individually. "
 
@@ -100,11 +120,12 @@ class BinaryInteractionParametersRegression():
                 bounds=self.activity_model_backend.get_bounds_elementwise()
             ) 
 
-            msg = self.activity_model_backend.get_message_elementwise(
-                result=result,
-                regression_params=regression_params,
-                components=self.VLE_data.components
-            )
+            if verbose:
+                msg = self.activity_model_backend.get_message_elementwise(
+                    result=result,
+                    regression_params=regression_params,
+                    components=self.VLE_data.components
+                )
 
             opt_data_results.append(result.x)
 
@@ -113,8 +134,7 @@ class BinaryInteractionParametersRegression():
         pass
 
 
-
-    def estimate_polynomial_from_elementwise_optimisation(self) -> None:
+    def _estimate_polynomial_from_elementwise_optimisation(self) -> None:
 
         " Method for regressing DIPPR polynomial parameters based on results of elementwise "
         " regression of Binary Interaction Parameters"
@@ -133,22 +153,23 @@ class BinaryInteractionParametersRegression():
         )
         estimation_results = elementwise_estimator.estimate_coefficients()
         self.activity_model_backend.get_polynomial_coeffs_estimation_message(
-            estimation_results=estimation_results
+            estimation_results=estimation_results,
+            polynomial=self.polynomial
         )
 
-        BIP_coeffs = [estimation_results[k].x for k in range(len(estimation_results))]
-        BIP_polynomial_coeffs = [
-            self.polynomial.get_absolute_coeffs(
-                coeffs=BIP_coeffs[k]
-            ) for k in range(len(BIP_coeffs))
-        ]
+        # NOTE: elementwise regression considers only temperature dependant BIPs
+        bip_names = [bip.name for bip in self.activity_model_backend.BIPs
+                      if bip.is_regressed and bip.is_temperature_dependant]
+        BIP_estimation_results = {
+            bip_names[k]: estimation_results[k].x
+            for k in range(len(estimation_results))
+        }
 
         self._record_regression_results(
             regression_method=RegressionMethod.ELEMENTWISE,
-            BIP_polynomial_coeffs=BIP_polynomial_coeffs
+            BIP_estimation_results=BIP_estimation_results
         )
 
-        
         pass
 
 
@@ -156,14 +177,11 @@ class BinaryInteractionParametersRegression():
     def estimate_polynomial_from_VLE_data(self,
                                           n_jobs:int = 1,
                                           is_memetic:bool = True,
-                                          verbose:bool = False) -> None: 
+                                          verbose:bool = False,
+                                          use_biased_initialization: bool = True) -> None: 
 
         " Method for regressing parameters directly from VLE data "
         activity_model = self.activity_model_backend
-
-        scipy_bounds = self.polynomial.get_bounds_scipy()
-        lower_bounds = [bound[0] for bound in scipy_bounds]*activity_model.number_of_BIP_parameters
-        upper_bounds = [bound[1] for bound in scipy_bounds]*activity_model.number_of_BIP_parameters
 
         if is_memetic: 
             memetic_callback = PymooCallbackHandler(
@@ -176,42 +194,66 @@ class BinaryInteractionParametersRegression():
             memetic_callback = Callback()
 
         problem = PymooPolynomialEstimator(
-            number_of_parameters=len(lower_bounds),
             n_jobs=n_jobs,
             objective_function=self._objective_function_from_VLE,
-            lower_bounds=lower_bounds,
-            upper_bounds=upper_bounds,
             VLE_data=self.VLE_data,
             polynomial=self.polynomial,
+            parameter_mapper=self.parameter_mapper
         )
 
+        if use_biased_initialization is True: 
+            if self.regression_results_cache[RegressionMethod.ELEMENTWISE] is None:
+                msg = (" No elementwise optimization results found to implement biased "
+                       "initialization. Running elementwise optimization now. ")
+                print(msg)
+                self.estimate_polynomial_elementwise()
+
+            BIP_config = self.regression_results_cache[
+                RegressionMethod.ELEMENTWISE
+            ]['regressed_BIPs']
+
+            initial_population = OwnBiasedSampling(
+                BIP_config = BIP_config,
+                fraction_of_biased_samples=0.2,
+                bias_strength=0.5
+            )
+        else: 
+            initial_population = FloatRandomSampling()
+
         algorithm = GA(pop_size=1000,
-                       eliminate_duplicates=True)
+                       eliminate_duplicates=True,
+                       sampling=initial_population)
         
         results = pymoo_minimize(
             problem=problem,
             algorithm=algorithm,
-            termination=("n_gen", 500),
+            termination=("n_gen", 100),
             seed=1,
             verbose=verbose,
             callback=memetic_callback
         )
 
-        activity_model.get_message_estimation_from_VLE(
-            coeffs = results.X,
-            total_residual = results.F[0]
+        BIP_data_vect = self.parameter_mapper.decode_pymoo_vector(
+            optimization_vector=results.X
         )
 
-        BIP_coeffs = results.X.reshape((activity_model.number_of_BIP_parameters, 
-                                        self.polynomial.degree))
-        BIP_polynomial_coeffs = [
-            self.polynomial.get_absolute_coeffs(
-                coeffs=BIP_coeffs[k]
-            ) for k in range(len(BIP_coeffs))]
+        activity_model.get_message_estimation_from_VLE(
+            decoded_bip_data=BIP_data_vect,
+            polynomial=self.polynomial,
+            total_residual=results.F[0]
+        )
         
+        bip_names = [bip.name for bip in self.activity_model_backend.BIPs
+                      if bip.is_regressed]
+        
+        BIP_estimation_results = {
+            bip_names[k]: BIP_data_vect[bip_names[k]]
+            for k in range(len(BIP_data_vect))
+        }
+
         self._record_regression_results(
             regression_method=RegressionMethod.DIRECT_VLE,
-            BIP_polynomial_coeffs=BIP_polynomial_coeffs
+            BIP_estimation_results=BIP_estimation_results
         )
 
         pass
@@ -221,35 +263,18 @@ class BinaryInteractionParametersRegression():
         
         for method, results in self.regression_results_cache.items():
             print(f" Regression method: {method.value} ")
-            print(f" BIP polynomial coefficients: {results['BIP_polynomial_coeffs']}")
+            for bip in results['regressed_BIPs']:
+                if hasattr(bip.value, 'shape'):
+                    print(f"   {bip.name}:"
+                          f" {np.array2string(
+                              bip.value, 
+                              formatter={'float_kind': lambda x: f'{x:6.3f}'})}"
+                    )
+                else:
+                    print(f"   {bip.name}: {bip.value:.3f}")
             print(f" Goodness of fit (R^2): {results['goodness_of_fit']:.4f}")
             print("-"*50)
-
-        method_selected = input(
-            f" Select the regression method to visualize the results \n"
-            f" press [1] to select elementwise \n"
-            f" press [2] to select direct VLE: \n"
-            f" input: ")
-        
-        if method_selected == '1':
-            self.regression_method = RegressionMethod.ELEMENTWISE
-            self.BIP_polynomial_coeffs = self.regression_results_cache[
-                RegressionMethod.ELEMENTWISE]['BIP_polynomial_coeffs']
-            self.goodness_of_fit = self.regression_results_cache[
-                RegressionMethod.ELEMENTWISE]['goodness_of_fit']
-        elif method_selected == '2':
-            self.regression_method = RegressionMethod.DIRECT_VLE
-            self.BIP_polynomial_coeffs = self.regression_results_cache[
-                RegressionMethod.DIRECT_VLE]['BIP_polynomial_coeffs']
-            self.goodness_of_fit = self.regression_results_cache[
-                RegressionMethod.DIRECT_VLE]['goodness_of_fit']
-        else:
-            print(" Invalid selection. Defaulting to elementwise regression results. ")
-            self.regression_method = RegressionMethod.ELEMENTWISE
-            self.BIP_polynomial_coeffs = self.regression_results_cache[
-                RegressionMethod.ELEMENTWISE]['BIP_polynomial_coeffs']
-            self.goodness_of_fit = self.regression_results_cache[
-                RegressionMethod.ELEMENTWISE]['goodness_of_fit']
+        print("\n"*2)
 
 
     def _estimate_y_calculated(self,
@@ -265,7 +290,7 @@ class BinaryInteractionParametersRegression():
         y2_val = 1 - y1_val
         
         gamma_1_calc, gamma_2_calc = self.activity_model_backend.get_activity_coefs(
-            theta = BIP_coeffs,
+            BIP_coeffs = BIP_coeffs,
             x_val = x1_val
         )
 
@@ -316,6 +341,10 @@ class BinaryInteractionParametersRegression():
         saturation_pressure_Pa_1 = regression_params['saturation_pressure_Pa_1']
         saturation_pressure_Pa_2 = regression_params['saturation_pressure_Pa_2']
 
+        BIP_coeffs = self.parameter_mapper.elementwise_regression_adapter(
+            optimization_vector=theta
+        )
+
         error_data = []
         for k in range(len(x_exp_data)):
 
@@ -331,7 +360,7 @@ class BinaryInteractionParametersRegression():
                 temperature_K = temperature_K,
                 saturation_pressure_Pa_1 = saturation_pressure_Pa_1,
                 saturation_pressure_Pa_2 = saturation_pressure_Pa_2,
-                BIP_coeffs = theta
+                BIP_coeffs = BIP_coeffs
             )
 
             y1_calc_val = output['y_calc_val_1']
@@ -353,26 +382,31 @@ class BinaryInteractionParametersRegression():
                                      polynomial,
                                      VLE_data) -> float:
 
-        param_coeffs = coeffs.reshape(
-            (self.activity_model_backend.number_of_BIP_parameters, polynomial.degree)
+        decoded_params = self.parameter_mapper.decode_pymoo_vector(
+            optimization_vector=coeffs
         )
-        
+
         error_data = []
         for T_x_y_point in VLE_data.T_x_y_points:
-            theta = []
 
-            BIP_12_calc = polynomial.evaluate(temperature_K = T_x_y_point.temperature_K,
-                                            coeffs = param_coeffs[0])
-            BIP_21_calc = polynomial.evaluate(temperature_K = T_x_y_point.temperature_K,
-                                            coeffs = param_coeffs[1])
-            theta = np.array([BIP_12_calc, BIP_21_calc])
+            BIP_estimates = []
+            for bip in self.activity_model_backend.BIPs:
+                if not bip.is_regressed:
+                    continue
+                if bip.is_temperature_dependant:
+                    BIP_estimates.append(polynomial.evaluate(
+                        temperature_K=T_x_y_point.temperature_K,
+                        coeffs=decoded_params[bip.name]
+                    ))
+                else:
+                    BIP_estimates.append(decoded_params[bip.name])
 
             error_val = self._objective_function_elementwise(
-                theta = theta,
-                regression_params = {
-                    'x1': np.array([point.x1_mol_frac for point in T_x_y_point.data]),
-                    'y1': np.array([point.y1_mol_frac for point in T_x_y_point.data]),
-                    'pressure_Pa': np.array([point.pressure_Pa for point in T_x_y_point.data]),
+                theta=BIP_estimates,
+                regression_params={
+                    'x1': [point.x1_mol_frac for point in T_x_y_point.data],
+                    'y1': [point.y1_mol_frac for point in T_x_y_point.data],
+                    'pressure_Pa': [point.pressure_Pa for point in T_x_y_point.data],
                     'temperature_K': T_x_y_point.temperature_K,
                     'saturation_pressure_Pa_1': T_x_y_point.comp_1_saturation_pressure_Pa,
                     'saturation_pressure_Pa_2': T_x_y_point.comp_2_saturation_pressure_Pa,
@@ -382,14 +416,12 @@ class BinaryInteractionParametersRegression():
         return sum(error_data)
 
 
-    def _calculate_goodness_of_fit(self) -> None:
+    def _calculate_goodness_of_fit(self,
+                                   regressed_BIPs: list[BinaryInteractionParameter]) -> float:
         """
         Calculates the goodness of fit (R^2) for the regressed model.
         """
-        if self.BIP_polynomial_coeffs is None:
-            return
-        
-        visualization_data = self._extract_visualization_data()
+        visualization_data = self._extract_visualization_data(regressed_BIPs=regressed_BIPs)
         y1_exp_data_plot = visualization_data['y1_exp_data']
         y1_calc_data_plot = visualization_data['y1_calc_data']
         
@@ -403,25 +435,52 @@ class BinaryInteractionParametersRegression():
     
 
     def _record_regression_results(self, 
-                                   BIP_polynomial_coeffs: list, 
+                                   BIP_estimation_results: dict, 
                                    regression_method: RegressionMethod) -> None :
 
 
-        self.BIP_polynomial_coeffs = BIP_polynomial_coeffs
-        self.goodness_of_fit = self._calculate_goodness_of_fit()
-        self.regression_method = regression_method
+        regressed_BIPs = self._get_updated_BIPs(BIP_estimation_results=BIP_estimation_results)
+        goodness_of_fit = self._calculate_goodness_of_fit(regressed_BIPs=regressed_BIPs)
 
         self.regression_results_cache[regression_method] = {
-            'BIP_polynomial_coeffs': BIP_polynomial_coeffs,
-            'goodness_of_fit': self.goodness_of_fit
+            'regressed_BIPs': regressed_BIPs,
+            'goodness_of_fit': goodness_of_fit
         }
+
+        self.latest_regression_results = regressed_BIPs
+
+        pass 
+
+    
+    def _get_updated_BIPs(self, 
+                          BIP_estimation_results: dict) -> list[BinaryInteractionParameter]:
+
+        updated_BIPs = []
+        
+        for bip in self.activity_model_backend.BIPs:
+            if bip.name in BIP_estimation_results:
+                updated_BIP = replace_dataclass_field(
+                    bip, 
+                    value=BIP_estimation_results[bip.name]
+                )
+                updated_BIPs.append(updated_BIP)
+            else:
+                updated_BIP = replace_dataclass_field(
+                    bip, 
+                    value=bip.initial_guess
+                )
+                updated_BIPs.append(updated_BIP)
+
+        return updated_BIPs
 
 
     def results_visualization(self,
                               get_parity_plot,
                               get_VLE_curve) -> None:
         
-        visualization_data = self._extract_visualization_data()
+        regressed_BIPs = self.latest_regression_results
+ 
+        visualization_data = self._extract_visualization_data(regressed_BIPs=regressed_BIPs)
         y1_exp_data_plot = visualization_data['y1_exp_data']
         y1_calc_data_plot = visualization_data['y1_calc_data']
         x1_exp_data_plot = visualization_data['x1_exp_data']
@@ -429,8 +488,7 @@ class BinaryInteractionParametersRegression():
         y2_calc_elementwise_data_plot = visualization_data['y2_calc_elementwise_data']
         point_indices = visualization_data['point_indices']
 
-        if self.goodness_of_fit is None:
-            self._calculate_goodness_of_fit()
+        goodness_of_fit = self._calculate_goodness_of_fit(regressed_BIPs=regressed_BIPs)
 
         if get_parity_plot is True: 
             plt.figure(figsize=(6,6))
@@ -442,7 +500,7 @@ class BinaryInteractionParametersRegression():
             plt.ylabel(f'Calculated y_{self.VLE_data.components[0]}')
             plt.title(f'Parity Plot for VLE of {self.VLE_data.components[0]} and '
                       f'{self.VLE_data.components[1]} \n'
-                      f'R2 {self.VLE_data.components[0]} =  {self.goodness_of_fit:.3f}')   
+                      f'R2 {self.VLE_data.components[0]} =  {goodness_of_fit:.3f}')   
             plt.xlim(0, 1)
             plt.ylim(0, 1)
             plt.legend()
@@ -495,7 +553,8 @@ class BinaryInteractionParametersRegression():
         pass
 
 
-    def _extract_visualization_data(self) -> dict: 
+    def _extract_visualization_data(self,
+                                    regressed_BIPs: list[BinaryInteractionParameter]) -> dict: 
 
         """
         Method for extracting the data for visualization of regression results.
@@ -566,9 +625,14 @@ class BinaryInteractionParametersRegression():
             saturation_pressure_Pa_2 = saturation_pressure_Pa_2_data[k]
 
             BIP_values = []
-            for j in range(0, len(self.BIP_polynomial_coeffs)):
-                BIP_val = self.polynomial.evaluate(temperature_K = temperature_K,
-                                                   coeffs = self.BIP_polynomial_coeffs[j])
+            for bip in regressed_BIPs:
+                if not bip.is_regressed:
+                    continue
+                if bip.is_temperature_dependant:
+                    BIP_val = self.polynomial.evaluate(temperature_K = temperature_K,
+                                                       coeffs = bip.value)
+                else:
+                    BIP_val = bip.value
                 BIP_values.append(BIP_val)
 
             output = self._estimate_y_calculated(
@@ -590,9 +654,15 @@ class BinaryInteractionParametersRegression():
             y1_calc_data_plot.append(output['y_calc_val_1'])
             y2_calc_data_plot.append(output['y_calc_val_2'])
 
+            # optional visualization to check the results of the elementwise regression 
             if self.elementwise_opt_results is not None:
+
                 pt_idx = point_indices[k]
-                BIP_elementwise_values = self.elementwise_opt_results[pt_idx]
+                BIP_elementwise_values = list(self.elementwise_opt_results[pt_idx])
+                for bip in regressed_BIPs:
+                    if bip.is_regressed and not bip.is_temperature_dependant:
+                        BIP_elementwise_values.append(bip.value)
+
                 output_elementwise = self._estimate_y_calculated(
                     x1_val = x1_exp,
                     y1_val = y1_exp,

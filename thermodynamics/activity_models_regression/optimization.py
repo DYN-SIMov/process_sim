@@ -17,6 +17,8 @@ from joblib import delayed as joblib_delayed
 from typing import Protocol
 from enum import Enum
 
+from pymoo.operators.sampling.rnd import FloatRandomSampling
+
 
 class LocalOptimizationMethod(Enum):
     NELDER_MEAD = "Nelder-Mead"
@@ -183,7 +185,7 @@ class NormalizedForm(PolynominalFormInterface):
 class PolynomialExponentialDIPPR(PolynomialInterface): 
 
     " 4 parameter DIPPR-style polynomial for BIP: "
-    " Lambda_ij = exp(A + B/T + C*ln(T) + D*T). "
+    " BIP = exp(A + B/T + C*ln(T) + D*T). "
     " Based on simplified version of the polynomial form described in docs "
     " of thermo python library (thermo.Wilson). "
 
@@ -239,7 +241,7 @@ class PolynomialExponentialDIPPR(PolynomialInterface):
 class PolynomialNRTL(PolynomialInterface): 
 
     " 4 parameter polynominal for NRTL model: "
-    " Lambda_ij = exp(A + B/T + C*ln(T) + D*T). "
+    " BIP = A + B/T + C*ln(T) + D*T. "
     " Based on simplified version of the polynomial form described in docs "
     " of thermo python library (thermo.Wilson). "
 
@@ -426,10 +428,9 @@ class PolynomialElementwiseEstimator():
 
 
 class PymooPolynomialEstimator(Problem):
+    
     def __init__(self, 
-                 number_of_parameters,
-                 lower_bounds,
-                 upper_bounds, 
+                 parameter_mapper, 
                  objective_function,
                  VLE_data,
                  polynomial,
@@ -437,11 +438,17 @@ class PymooPolynomialEstimator(Problem):
                  backend = 'loky', 
                  **kwargs):
         
+        self.parameter_mapper = parameter_mapper
         self.objective_function = objective_function
         self.VLE_data = VLE_data
         self.polynomial = polynomial
         self.n_jobs = n_jobs
         self.backend = backend
+
+        config = self.parameter_mapper.get_pymoo_config()
+        number_of_parameters = config['number_of_parameters']
+        lower_bounds = config['lower_bounds']
+        upper_bounds = config['upper_bounds']
 
         super().__init__(
             n_var=number_of_parameters,
@@ -466,9 +473,11 @@ class PymooPolynomialEstimator(Problem):
         try: 
             with np.errstate(invalid="raise", divide="raise", over="raise"):
 
-                objective_function_val = self.objective_function(coeffs=coeffs,
-                                                                 VLE_data=self.VLE_data,
-                                                                 polynomial=self.polynomial)
+                objective_function_val = self.objective_function(
+                    coeffs=coeffs,
+                    VLE_data=self.VLE_data,
+                    polynomial=self.polynomial
+                )
                 return objective_function_val
             
         except FloatingPointError as e: 
@@ -652,4 +661,148 @@ class PymooCallbackHandler(Callback):
             ]
         ) 
         return condition
+    
+
+class OwnBiasedSampling(FloatRandomSampling):
+
+    def __init__(self,
+                 BIP_config: list,
+                 fraction_of_biased_samples: float = 0.5,
+                 bias_strength: float = 0.5,
+                 seed: int = 42):
+        super().__init__()
+        self.BIP_config = BIP_config
+        self.fraction_of_biased_samples = fraction_of_biased_samples
+        self.bias_strength = bias_strength
+        self.seed = seed
+
+        self.random_engine = np.random.default_rng(seed=self.seed)
+        self.initial_guess = self._get_initial_guess()
+
+
+    def _get_initial_guess(self) -> np.ndarray:
+
+        initial_guess = []
+        for bip in self.BIP_config:
+            if bip.is_regressed and bip.is_temperature_dependant:
+                initial_guess.extend(bip.value)
+            elif bip.is_regressed and not bip.is_temperature_dependant:
+                initial_guess.append(bip.value)
+
+        return np.array(initial_guess)
+
+
+    def _do(self, 
+            problem, 
+            n_samples,
+            random_state=None,
+            *args,
+            **kwargs
+        ) -> np.ndarray:    
+
+        n_biased = int(n_samples * self.fraction_of_biased_samples)
+        n_random = n_samples - n_biased
+        xl = problem.xl
+        xu = problem.xu
+
+        random_samples = self.random_engine.uniform(
+            low=xl, high=xu, size=(n_random, xl.shape[0])
+        )
+
+        biased_samples = (
+            self.initial_guess + 
+            self.bias_strength * self.random_engine.uniform(
+                low=-1.0, high=1.0, size=(n_biased, xl.shape[0])
+            )
+        )
+
+        if problem.has_bounds():
+            biased_samples = np.clip(biased_samples, xl, xu)
+
+        population = np.vstack((random_samples, biased_samples))
+
+        return population
                 
+
+
+class OptimizationVectorMapper(): 
+
+    def __init__(self,
+                 activity_model,
+                 polynomial):
+        self.activity_model = activity_model
+        self.polynomial = polynomial
+
+        self.temp_dep_bips = self.activity_model.get_temp_dependant_BIPs()
+        self.temp_indep_bips = self.activity_model.get_temp_independant_BIPs()
+
+        pass
+
+
+    def elementwise_regression_adapter(self, optimization_vector: np.ndarray) -> np.ndarray:
+
+        """  
+        This method is needed to adapt the input for the activity calculation regression for 
+        elementwise objective function WHEN the regressed parameters include both 
+        temperature-dependant and temperature-independant BIPs. 
+
+        Since elementwise regression does not consider temperature independant parameters, values of 
+        temperature independant BIPs are taken from the initial guess and appended to the 
+        optimization vector to make it compatible with the activity coefficients calculation.
+        """
+
+        if len(optimization_vector) == len(self.temp_dep_bips) + len(self.temp_indep_bips):
+            return optimization_vector
+        
+        for bip in self.temp_indep_bips:
+            optimization_vector = np.append(optimization_vector, bip.initial_guess)
+
+        return optimization_vector
+
+
+    def get_pymoo_config(self) -> dict: 
+
+        lower_bounds = []
+        upper_bounds = []
+
+        for bip in self.activity_model.BIPs: 
+            if not bip.is_regressed:
+                continue
+
+            if bip.is_temperature_dependant:
+                bounds_tuple = self.polynomial.get_bounds_scipy()
+                lower_bounds.extend([bounds_tuple[k][0] for k in range(len(bounds_tuple))])
+                upper_bounds.extend([bounds_tuple[k][1] for k in range(len(bounds_tuple))])
+            else:
+                lower_bounds.append(bip.bounds[0])
+                upper_bounds.append(bip.bounds[1])
+
+        number_of_parameters = len(lower_bounds)
+
+        config = {
+            'number_of_parameters': number_of_parameters,
+            'lower_bounds': lower_bounds,
+            'upper_bounds': upper_bounds
+        }
+
+        return config
+
+
+    def decode_pymoo_vector(self, optimization_vector) -> list: 
+
+        decoded_map = {}
+        param_ind = 0
+        degree = self.polynomial.degree
+
+        for bip in self.activity_model.BIPs: 
+            if not bip.is_regressed:
+                continue
+
+            if bip.is_temperature_dependant: 
+                decoded_map[bip.name] = optimization_vector[param_ind : param_ind + degree]
+                param_ind += degree
+            else:
+                decoded_map[bip.name] = optimization_vector[param_ind]
+                param_ind += 1
+
+        return decoded_map
