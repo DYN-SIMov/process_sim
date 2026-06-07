@@ -216,30 +216,30 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialNRTL",
                 "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
-                "goodness_of_fit": 0.9994565969418504,
+                "goodness_of_fit": 0.9997372918394216,
                 "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-06-01T07:45:10.800911"
+                "date_of_entry_creation": "2026-06-07T06:37:27.344779"
             },
             "BIP_data": {
                 "tau_12": [
-                    5.16647315933769,
-                    -702.946820338796,
-                    302.935861772253,
-                    3.1482722241967056
+                    94.97332391603568,
+                    -614.8403691507133,
+                    980.8076704405828,
+                    9.105421992770822
                 ],
                 "tau_21": [
-                    -99.99999999999822,
-                    988.0808788130948,
-                    19.900177591060558,
-                    -0.05320486202003892
+                    -99.99999999998585,
+                    706.4338124113679,
+                    20.654856820618644,
+                    -0.0632117789010992
                 ],
-                "alpha_12": 0.3,
-                "alpha_21": 0.3
+                "alpha_12": 0.2987131209406445,
+                "alpha_21": 0.5
             }
         },
         "67-56-1-7732-18-5": {
@@ -252,30 +252,30 @@
                 "eos_backend": "SoaveRedlichKwongEoSBackend",
                 "polynomial": "PolynomialNRTL",
                 "polynomial_equation": "BIP = A + B/T + C*ln(T) + D*T",
-                "goodness_of_fit": 0.9994565969418504,
+                "goodness_of_fit": 0.9997372918394216,
                 "regression_method": "Direct regression from VLE data using memetic algorithm",
                 "VLE_data_source": "Gmehling,, J. and Onken,U. 1977. Vapor-Liquid Equilibrium Data Collection, Dechema, Frankfurt, Germany,vol. 1,p. 60",
                 "temperature_lb_K": 338.84999999999997,
                 "temperature_ub_K": 371.54999999999995,
                 "pressure_lb_Pa": 100000.0,
                 "pressure_ub_Pa": 100000.0,
-                "date_of_entry_creation": "2026-06-01T07:45:10.800911"
+                "date_of_entry_creation": "2026-06-07T06:37:27.344779"
             },
             "BIP_data": {
                 "tau_12": [
-                    5.16647315933769,
-                    -702.946820338796,
-                    302.935861772253,
-                    3.1482722241967056
+                    94.97332391603568,
+                    -614.8403691507133,
+                    980.8076704405828,
+                    9.105421992770822
                 ],
                 "tau_21": [
-                    -99.99999999999822,
-                    988.0808788130948,
-                    19.900177591060558,
-                    -0.05320486202003892
+                    -99.99999999998585,
+                    706.4338124113679,
+                    20.654856820618644,
+                    -0.0632117789010992
                 ],
-                "alpha_12": 0.3,
-                "alpha_21": 0.3
+                "alpha_12": 0.2987131209406445,
+                "alpha_21": 0.5
             }
         },
         "methanol-n-propanol": {

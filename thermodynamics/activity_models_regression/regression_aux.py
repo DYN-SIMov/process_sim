@@ -241,19 +241,21 @@ class BinaryInteractionParametersRegression():
             total_residual = results.F[0]
         )
 
-
         BIP_data_vect = self.parameter_mapper.decode_pymoo_vector(
             optimization_vector=results.X
         )
         
-        BIP_polynomial_coeffs = [
-            self.polynomial.get_absolute_coeffs(
-                coeffs=BIP_coeffs[k]
-            ) for k in range(len(BIP_coeffs))]
+        bip_names = [bip.name for bip in self.activity_model_backend.BIPs
+                      if bip.is_regressed]
         
+        BIP_estimation_results = {
+            bip_names[k]: BIP_data_vect[bip_names[k]]
+            for k in range(len(BIP_data_vect))
+        }
+
         self._record_regression_results(
             regression_method=RegressionMethod.DIRECT_VLE,
-            BIP_polynomial_coeffs=BIP_polynomial_coeffs
+            BIP_estimation_results=BIP_estimation_results
         )
 
         pass
@@ -263,35 +265,18 @@ class BinaryInteractionParametersRegression():
         
         for method, results in self.regression_results_cache.items():
             print(f" Regression method: {method.value} ")
-            print(f" BIP polynomial coefficients: {results['BIP_polynomial_coeffs']}")
+            for bip in results['regressed_BIPs']:
+                if hasattr(bip.value, 'shape'):
+                    print(f"   {bip.name}:"
+                          f" {np.array2string(
+                              bip.value, 
+                              formatter={'float_kind': lambda x: f'{x:6.3f}'})}"
+                    )
+                else:
+                    print(f"   {bip.name}: {bip.value:.3f}")
             print(f" Goodness of fit (R^2): {results['goodness_of_fit']:.4f}")
             print("-"*50)
-
-        method_selected = input(
-            f" Select the regression method to visualize the results \n"
-            f" press [1] to select elementwise \n"
-            f" press [2] to select direct VLE: \n"
-            f" input: ")
-        
-        if method_selected == '1':
-            self.regression_method = RegressionMethod.ELEMENTWISE
-            self.BIP_polynomial_coeffs = self.regression_results_cache[
-                RegressionMethod.ELEMENTWISE]['BIP_polynomial_coeffs']
-            self.goodness_of_fit = self.regression_results_cache[
-                RegressionMethod.ELEMENTWISE]['goodness_of_fit']
-        elif method_selected == '2':
-            self.regression_method = RegressionMethod.DIRECT_VLE
-            self.BIP_polynomial_coeffs = self.regression_results_cache[
-                RegressionMethod.DIRECT_VLE]['BIP_polynomial_coeffs']
-            self.goodness_of_fit = self.regression_results_cache[
-                RegressionMethod.DIRECT_VLE]['goodness_of_fit']
-        else:
-            print(" Invalid selection. Defaulting to elementwise regression results. ")
-            self.regression_method = RegressionMethod.ELEMENTWISE
-            self.BIP_polynomial_coeffs = self.regression_results_cache[
-                RegressionMethod.ELEMENTWISE]['BIP_polynomial_coeffs']
-            self.goodness_of_fit = self.regression_results_cache[
-                RegressionMethod.ELEMENTWISE]['goodness_of_fit']
+        print("\n"*2)
 
 
     def _estimate_y_calculated(self,

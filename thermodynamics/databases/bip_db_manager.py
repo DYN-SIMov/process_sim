@@ -3,6 +3,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 import json 
+import numpy as np
 from datetime import datetime
 from enum import Enum
 
@@ -12,8 +13,11 @@ from thermodynamics.activity_models_regression.regression_aux import BinaryInter
 from thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialNRTL, PolynomialRegular
 from thermodynamics.core.properties import WilsonActivityModel, NRTLActivityModel
 
-
 from termcolor import colored  # for colored text output
+
+
+class RegressionMethodSelectionError(ValueError):
+    pass
 
 
 class ActivityModel(Enum):
@@ -56,6 +60,8 @@ class BIPDatabaseManager:
     
         self.activity_model = self._get_activity_model_from_estimator(BIP_estimator=BIP_estimator)
         self.polynomial = self._get_polynomial_from_estimator(BIP_estimator=BIP_estimator)
+
+        self._select_regression_method(BIP_estimator=BIP_estimator)
     
         pair_key_data = self._get_component_pair_key(
             component1=BIP_estimator.VLE_data.components[0], 
@@ -91,6 +97,57 @@ class BIPDatabaseManager:
         )
 
         self._save_database()
+
+        pass
+
+
+    def _select_regression_method(self,
+                                   BIP_estimator: BinaryInteractionParametersRegression) -> None:
+
+        regression_results_cache = BIP_estimator.regression_results_cache
+
+        print("\n")
+        print("Available regression results: ")
+        for method, results in regression_results_cache.items():
+            print(f" Regression method: {method.value} ")
+            for bip in results['regressed_BIPs']:
+                if hasattr(bip.value, 'shape'):
+                    print(f"   {bip.name}:"
+                          f" {np.array2string(
+                              bip.value, 
+                              formatter={'float_kind': lambda x: f'{x:6.3f}'})}"
+                    )
+                else:
+                    print(f"   {bip.name}: {bip.value:.3f}")
+            print(f" Goodness of fit (R^2): {results['goodness_of_fit']:.4f}")
+            print("-"*50)
+        print("\n")
+
+        available_methods = list(regression_results_cache.keys())
+        options_str = '\n'.join(
+            f" press [{k+1}] to select {method.value}"
+            for k, method in enumerate(available_methods)
+        )
+        method_selected = input(
+            f" Select the regression result to save to the database:\n"
+            f"{options_str}\n"
+            f" input: "
+        )
+
+        try:
+            selected_index = int(method_selected) - 1
+            if (selected_index < 0 or selected_index >= len(available_methods)):
+                raise RegressionMethodSelectionError
+            chosen_method = available_methods[selected_index]
+        except (RegressionMethodSelectionError):
+            print(f" Invalid selection. Defaulting to {available_methods[0].value}. ")
+            chosen_method = available_methods[0]
+
+        BIP_estimator.result_to_save = {
+            'regression_method': chosen_method.value,
+            'regressed_BIPs': regression_results_cache[chosen_method]['regressed_BIPs'],
+            'goodness_of_fit': regression_results_cache[chosen_method]['goodness_of_fit']
+        }
 
         pass
 
@@ -182,8 +239,8 @@ class BIPDatabaseManager:
 
         polynomial_equation_str = BIP_estimator.polynomial.polynomial.equation_str
         eos_backend = BIP_estimator.eos_backend.__class__.__name__
-        goodness_of_fit = BIP_estimator.goodness_of_fit
-        regression_method = BIP_estimator.regression_method.value
+        goodness_of_fit = BIP_estimator.result_to_save['goodness_of_fit']
+        regression_method = BIP_estimator.result_to_save['regression_method']
 
         return {
             'component1_name': component1,
@@ -208,14 +265,8 @@ class BIPDatabaseManager:
     def _extract_BIP_data(self,
                           BIP_estimator: BinaryInteractionParametersRegression,
                           name_key: str) -> dict:
-        
-        BIP_names = BIP_estimator.activity_model_backend.get_BIP_names()
-        BIP_coeffs = BIP_estimator.BIP_polynomial_coeffs
 
-        # if alpha is fixed, there are 2 coefficients instead of 4, so BIP_coeffs should be adjusted
-        if (self.activity_model == ActivityModel.NRTL and 
-            BIP_estimator.activity_model_backend.alpha_is_fixed):
-            BIP_coeffs.extend([BIP_estimator.activity_model_backend.alpha] * 2)
+        regressed_BIPs = BIP_estimator.result_to_save['regressed_BIPs']
 
         component1, component2 = BIP_estimator.VLE_data.components
         components_swapped = (
@@ -223,15 +274,17 @@ class BIPDatabaseManager:
         )
 
         if components_swapped:
-            swapped_coeffs = []
-            for k in range(0, len(BIP_names), 2):
-                swapped_coeffs.extend([BIP_coeffs[k+1], BIP_coeffs[k]])
-
-            BIP_coeffs = swapped_coeffs
+            swapped_BIPs = []
+            for k in range(0, len(regressed_BIPs), 2):
+                swapped_BIPs.extend([regressed_BIPs[k+1], regressed_BIPs[k]])
+            regressed_BIPs = swapped_BIPs
         
         BIP_data = {}
-        for BIP_name, BIP_coeff in zip(BIP_names, BIP_coeffs):
-            BIP_data[BIP_name] = list(BIP_coeff) if hasattr(BIP_coeff, 'shape') else BIP_coeff
+        for bip in regressed_BIPs:
+
+            # guard against numpy data types that are not JSON serializable
+            value = bip.value.tolist() if hasattr(bip.value, 'tolist') else bip.value
+            BIP_data[bip.name] = value
 
         return BIP_data
     

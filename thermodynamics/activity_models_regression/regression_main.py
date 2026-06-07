@@ -42,7 +42,6 @@ def main():
         BIP_estimator.estimate_polynomial_from_VLE_data(n_jobs=4, is_memetic=True, verbose=True)
         BIP_estimator.results_visualization(get_parity_plot=True,
                                             get_VLE_curve=True)
-        BIP_estimator.compare_regression_methods()
 
 
     save_resuls = input(" Do you want to save the regression results to the database? (y/n): ")
