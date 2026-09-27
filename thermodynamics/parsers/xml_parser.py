@@ -1,4 +1,27 @@
+from dataclasses import dataclass
+
 import xml.etree.ElementTree as ET
+
+
+@dataclass(frozen=True)
+class TableCell: 
+    content: str | float | int
+    coords: str
+
+
+@dataclass(frozen=True)
+class TableRow:
+    cells: list[TableCell]
+    coords: str
+
+
+@dataclass(frozen=True)
+class Table:
+    content_rows: list[TableRow]
+    header_row: TableRow
+    title: str
+    coords: str
+
 
 
 class XMLParser:
@@ -138,7 +161,115 @@ class XMLParser:
         return metadata
 
 
-    def get_VLE_data(self): 
+    def _is_numeric_cell(self, content: str) -> bool:
+        """Check whether a cell content can be read as a single number."""
+        candidate = content.replace('\u2212', '-').replace(',', '.').strip()
+        try:
+            float(candidate)
+        except ValueError:
+            return False
+        return True
 
 
-        return None
+    def _build_table_row(self, row_element) -> TableRow:
+
+        cells = [
+            TableCell(
+                content=self._full_text(cell_element),
+                coords=cell_element.get('coords', ''),
+            )
+            for cell_element in self._find_all_by_local_name(row_element, 'cell')
+        ]
+
+        return TableRow(cells=cells, coords=row_element.get('coords', ''))
+
+
+    def _get_table_title(self, figure_element) -> str:
+        """Concatenate the table label/head and its caption into a single title."""
+
+        title_parts = []
+        for local_name in ('head', 'figDesc'):
+            part_element = self._find_first_by_local_name(figure_element, local_name)
+            if part_element is not None:
+                text = self._full_text(part_element)
+                if text:
+                    title_parts.append(text)
+
+        return self._normalize_text(' '.join(title_parts))
+
+
+    def _split_header_and_content_rows(self, rows: list[TableRow]) -> tuple[TableRow, list[TableRow]]:
+        """Treat the leading non-numeric rows as the header; the rest is presumed to be data.
+        NOTE: relying on this assumption may not always be correct; implementation needs to be robustified later """
+
+        empty_row = TableRow(cells=[], coords='')
+        if not rows:
+            return empty_row, []
+
+        for index, row in enumerate(rows):
+            if row.cells and all(self._is_numeric_cell(cell.content) for cell in row.cells):
+                if index == 0:
+                    return empty_row, rows
+                return rows[index - 1], rows[index:]
+
+        return rows[0], rows[1:]
+
+
+    def _is_table_figure(self, figure_element) -> bool:
+        """GROBID tags table figures with type="table"; plain graphic figures carry no type."""
+
+        if figure_element.get('type') == 'table':
+            return True
+        return self._find_first_by_local_name(figure_element, 'table') is not None
+
+
+    def _detect_tables(self) -> list[Table]:
+
+        # GROBID emits tables as <figure type="table"> with the grid in a nested <table>.
+        tables = []
+        for figure_element in self._find_all_by_local_name(self.root, 'figure'):
+            if not self._is_table_figure(figure_element):
+                continue
+
+            table_element = self._find_first_by_local_name(figure_element, 'table')
+            row_elements = (
+                self._find_all_by_local_name(table_element, 'row')
+                if table_element is not None
+                else []
+            )
+
+            rows = [self._build_table_row(row_element) for row_element in row_elements]
+            header_row, content_rows = self._split_header_and_content_rows(rows)
+
+            tables.append(
+                Table(
+                    content_rows=content_rows,
+                    header_row=header_row,
+                    title=self._get_table_title(figure_element),
+                    coords=figure_element.get('coords', ''),
+                )
+            )
+
+        return tables
+
+
+    def _is_candidate_VLE_table(self, table: Table) -> bool:
+        """Cheap keyword pre-filter """
+
+        keywords = ('vle', 'vapor', 'vapour', 'liquid', 'equilibrium', 'x1', 'x1', 'y1', 'y1')
+        haystack = ' '.join(
+            [table.title, *(cell.content for cell in table.header_row.cells)]
+        ).lower()
+
+        return any(keyword in haystack for keyword in keywords)
+
+
+    def get_VLE_data(self):
+
+        tables = self._detect_tables()
+        candidate_tables = [table for table in tables if self._is_candidate_VLE_table(table)]
+
+        return {
+            "tables": tables,
+            "candidate_tables": candidate_tables,
+        }

@@ -319,7 +319,7 @@ class VLEDataPDFParser(PDFParser):
         """
 
         consolidate_header = "1" 
-        tei_coordinates_items = ["s", "ref", "biblStruct", "figure", "table"]
+        tei_coordinates_items = ["s", "ref", "biblStruct", "figure"]
 
         grobid_config: list[tuple[str, str]] = [
             ("consolidateHeader", consolidate_header),
@@ -363,9 +363,11 @@ class VLEDataPDFParser(PDFParser):
 
         grobid_output = self._send_pdf_to_grobid_via_http(pdf_path)
         tei_xml = grobid_output["tei_xml"]
-        vle_data = self._extract_VLE_data_from_tei_xml(tei_xml)
+        vle_data_extract = self._extract_VLE_data_from_tei_xml(tei_xml)
 
-        return vle_data
+        print(vle_data_extract)
+
+        return vle_data_extract
 
 
 

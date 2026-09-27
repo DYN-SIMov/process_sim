@@ -57,9 +57,13 @@ def main():
 if __name__ == "__main__": 
     # main()
 
+    ammonia_path = "/Users/maksimov.ps95/Desktop/Reading/Thermodynamics/VLE data/NH3 - H2O VLE data.pdf"
+    methanol_path = "/Users/maksimov.ps95/Desktop/Reading/Thermodynamics/VLE data/MeOH - H2O VLE data.pdf"
+    test_own = "/Users/maksimov.ps95/Desktop/Maksimovetal.2022.pdf"
+
     vle_parser = VLEDataPDFParser()
     vle_parser.get_VLE_data_from_pdf(
-        pdf_path="/Users/maksimov.ps95/Desktop/Reading/Thermodynamics/VLE data/NH3 - H2O VLE data.pdf"
+        pdf_path=test_own
     )
 
     pass
