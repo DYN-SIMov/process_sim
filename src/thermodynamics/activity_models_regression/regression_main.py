@@ -1,20 +1,18 @@
-import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
-from src.core.properties import SoaveRedlichKwongEoSBackend
+from core.properties import SoaveRedlichKwongEoSBackend
 
-from src.thermodynamics.activity_models_regression.data_handling import VLEData
-from src.thermodynamics.activity_models_regression.regression_aux import BinaryInteractionParametersRegression
-from src.thermodynamics.activity_models_regression.activity_models_aux import WilsonActivityModelRegression, NRTLActivityModelRegression
-from src.thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialRegular, PolynomialNRTL
-from src.thermodynamics.activity_models_regression.optimization import AbsoluteForm, NormalizedForm
+from thermodynamics.activity_models_regression.data_handling import VLEData
+from thermodynamics.activity_models_regression.regression_aux import BinaryInteractionParametersRegression
+from thermodynamics.activity_models_regression.activity_models_aux import WilsonActivityModelRegression, NRTLActivityModelRegression
+from thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialRegular, PolynomialNRTL
+from thermodynamics.activity_models_regression.optimization import AbsoluteForm, NormalizedForm
 
-from src.thermodynamics.databases.bip_db_manager import BIPDatabaseManager
+from thermodynamics.databases.bip_db_manager import BIPDatabaseManager
 
 from functools import partial
 
-from src.thermodynamics.parsers.pdf_processing import VLEDataPDFParser
+from thermodynamics.parsers.pdf_processing import VLEDataPDFParser
 
 def main():
 

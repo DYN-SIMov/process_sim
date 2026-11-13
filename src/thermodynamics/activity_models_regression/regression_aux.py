@@ -10,23 +10,20 @@ from pymoo.core.population import Population
 from pymoo.algorithms.soo.nonconvex.ga import GA, FloatRandomSampling
 from pymoo.optimize import minimize as pymoo_minimize
 
-import sys
-import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
-from src.core.properties import EquationOfStateInterface 
-from src.core.properties import PureComponentDataBackend
+from core.properties import EquationOfStateInterface 
+from core.properties import PureComponentDataBackend
 
-from src.thermodynamics.activity_models_regression.activity_models_aux import ActivityModelRegressionInterface
-from src.thermodynamics.activity_models_regression.activity_models_aux import BinaryInteractionParameter
-from src.thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialElementwiseEstimator, PolynomialInterface
-from src.thermodynamics.activity_models_regression.optimization import PolynominalFormInterface, AbsoluteForm, NormalizedForm
-from src.thermodynamics.activity_models_regression.optimization import PymooCallbackHandler, Callback
+from thermodynamics.activity_models_regression.activity_models_aux import ActivityModelRegressionInterface
+from thermodynamics.activity_models_regression.activity_models_aux import BinaryInteractionParameter
+from thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialElementwiseEstimator, PolynomialInterface
+from thermodynamics.activity_models_regression.optimization import PolynominalFormInterface, AbsoluteForm, NormalizedForm
+from thermodynamics.activity_models_regression.optimization import PymooCallbackHandler, Callback
 # from optimization import DIPPR_polynomial_regression_GA
-from src.thermodynamics.activity_models_regression.data_handling import VLEData
+from thermodynamics.activity_models_regression.data_handling import VLEData
 
-from src.thermodynamics.activity_models_regression.optimization import PymooPolynomialEstimator
-from src.thermodynamics.activity_models_regression.optimization import OptimizationVectorMapper
-from src.thermodynamics.activity_models_regression.optimization import OwnBiasedSampling
+from thermodynamics.activity_models_regression.optimization import PymooPolynomialEstimator
+from thermodynamics.activity_models_regression.optimization import OptimizationVectorMapper
+from thermodynamics.activity_models_regression.optimization import OwnBiasedSampling
 
 from typing import Type
 from enum import Enum

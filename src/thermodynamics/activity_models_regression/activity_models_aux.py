@@ -4,12 +4,8 @@ from typing import Protocol
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
-import sys
-import os
-
 from termcolor import colored
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
-from src.core.properties import WilsonActivityModel, NRTLActivityModel
+from core.properties import WilsonActivityModel, NRTLActivityModel
 
 @dataclass
 class BinaryInteractionParameter():

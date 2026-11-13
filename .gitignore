@@ -17,4 +17,8 @@ github/
 # ignoring the python cache files in all the directories
 __pycache__/
 
+# ignoring packaging metadata created by `pip install -e .`
+*.egg-info/
+build/
+
 

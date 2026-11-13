@@ -5,7 +5,7 @@ from pathlib import Path
 
 import requests
 
-from src.thermodynamics.parsers.xml_parser import XMLParser
+from thermodynamics.parsers.xml_parser import XMLParser
 
 class DockerNotAvailableError(RuntimeError):
     """Raised when Docker is not available on the system."""

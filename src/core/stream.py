@@ -1,5 +1,5 @@
 import numpy as np
-from src.core.properties import PropertyPackageInterface
+from core.properties import PropertyPackageInterface
 from dataclasses import dataclass 
 
 @dataclass
