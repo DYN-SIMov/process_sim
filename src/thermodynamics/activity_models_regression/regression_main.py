@@ -2,7 +2,7 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
-from src.thermodynamics.core.properties import SoaveRedlichKwongEoSBackend
+from src.core.properties import SoaveRedlichKwongEoSBackend
 
 from src.thermodynamics.activity_models_regression.data_handling import VLEData
 from src.thermodynamics.activity_models_regression.regression_aux import BinaryInteractionParametersRegression

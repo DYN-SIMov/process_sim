@@ -9,7 +9,7 @@ import os
 
 from termcolor import colored
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
-from src.thermodynamics.core.properties import WilsonActivityModel, NRTLActivityModel
+from src.core.properties import WilsonActivityModel, NRTLActivityModel
 
 @dataclass
 class BinaryInteractionParameter():

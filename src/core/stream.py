@@ -1,5 +1,5 @@
 import numpy as np
-from src.thermodynamics.core.properties import PropertyPackageInterface
+from src.core.properties import PropertyPackageInterface
 from dataclasses import dataclass 
 
 @dataclass

@@ -11,7 +11,7 @@ from chemicals import CAS_from_any
 
 from src.thermodynamics.activity_models_regression.regression_aux import BinaryInteractionParametersRegression
 from src.thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialNRTL, PolynomialRegular
-from src.thermodynamics.core.properties import WilsonActivityModel, NRTLActivityModel
+from src.core.properties import WilsonActivityModel, NRTLActivityModel
 
 from termcolor import colored  # for colored text output
 

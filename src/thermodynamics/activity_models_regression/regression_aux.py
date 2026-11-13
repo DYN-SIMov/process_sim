@@ -13,8 +13,8 @@ from pymoo.optimize import minimize as pymoo_minimize
 import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
-from src.thermodynamics.core.properties import EquationOfStateInterface 
-from src.thermodynamics.core.properties import PureComponentDataBackend
+from src.core.properties import EquationOfStateInterface 
+from src.core.properties import PureComponentDataBackend
 
 from src.thermodynamics.activity_models_regression.activity_models_aux import ActivityModelRegressionInterface
 from src.thermodynamics.activity_models_regression.activity_models_aux import BinaryInteractionParameter
