@@ -1,6 +1,6 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
 import json 
 import numpy as np
@@ -9,9 +9,9 @@ from enum import Enum
 
 from chemicals import CAS_from_any
 
-from thermodynamics.activity_models_regression.regression_aux import BinaryInteractionParametersRegression
-from thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialNRTL, PolynomialRegular
-from thermodynamics.core.properties import WilsonActivityModel, NRTLActivityModel
+from src.thermodynamics.activity_models_regression.regression_aux import BinaryInteractionParametersRegression
+from src.thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialNRTL, PolynomialRegular
+from src.thermodynamics.core.properties import WilsonActivityModel, NRTLActivityModel
 
 from termcolor import colored  # for colored text output
 
@@ -42,7 +42,7 @@ class PolynomialException(Exception):
 class BIPDatabaseManager: 
 
     def __init__(self,
-                 database_filepath: str = 'thermodynamics/databases/BIP_database.json'):
+                 database_filepath: str = os.path.join(os.path.dirname(__file__), 'BIP_database.json')):
         
         self.database_filepath = database_filepath
         self.data = self._load_database()

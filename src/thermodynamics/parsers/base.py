@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from thermodynamics.parsers.document_model import ParsedDocument
+from src.thermodynamics.parsers.document_model import ParsedDocument
 
 
 class BackendError(RuntimeError):

@@ -4,13 +4,13 @@ from pathlib import Path
 
 import requests
 
-from thermodynamics.parsers.base import BackendError, RawPayloadParser
-from thermodynamics.parsers.docker_service import (
+from src.thermodynamics.parsers.base import BackendError, RawPayloadParser
+from src.thermodynamics.parsers.docker_service import (
     ContainerisedService,
     wait_until_http_ready,
 )
-from thermodynamics.parsers.document_model import ParsedDocument
-from thermodynamics.parsers.xml_parser import TEIXMLParser
+from src.thermodynamics.parsers.document_model import ParsedDocument
+from src.thermodynamics.parsers.xml_parser import TEIXMLParser
 
 
 class GrobidBackend:

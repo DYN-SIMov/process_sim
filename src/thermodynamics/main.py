@@ -1,7 +1,11 @@
+import sys
+import os
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
 import numpy as np 
-from core import Stream
-from thermodynamics.core.properties import GammaPhiPackage
-from thermodynamics.core.properties import SoaveRedlichKwongEoSBackend, WilsonActivityModel
+from src.thermodynamics.core.stream import Stream
+from src.thermodynamics.core.properties import GammaPhiPackage
+from src.thermodynamics.core.properties import SoaveRedlichKwongEoSBackend, WilsonActivityModel
 
 
 if __name__ == "__main__":

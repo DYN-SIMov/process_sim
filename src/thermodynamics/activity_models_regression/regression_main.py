@@ -1,26 +1,25 @@
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
 
-from thermodynamics.core.properties import SoaveRedlichKwongEoSBackend
+from src.thermodynamics.core.properties import SoaveRedlichKwongEoSBackend
 
-from thermodynamics.activity_models_regression.data_handling import VLEData
-from thermodynamics.activity_models_regression.regression_aux import BinaryInteractionParametersRegression
-from thermodynamics.activity_models_regression.activity_models_aux import WilsonActivityModelRegression, NRTLActivityModelRegression
-from thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialRegular, PolynomialNRTL
-from thermodynamics.activity_models_regression.optimization import AbsoluteForm, NormalizedForm
+from src.thermodynamics.activity_models_regression.data_handling import VLEData
+from src.thermodynamics.activity_models_regression.regression_aux import BinaryInteractionParametersRegression
+from src.thermodynamics.activity_models_regression.activity_models_aux import WilsonActivityModelRegression, NRTLActivityModelRegression
+from src.thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialRegular, PolynomialNRTL
+from src.thermodynamics.activity_models_regression.optimization import AbsoluteForm, NormalizedForm
 
-from thermodynamics.databases.bip_db_manager import BIPDatabaseManager
+from src.thermodynamics.databases.bip_db_manager import BIPDatabaseManager
 
 from functools import partial
 
-from thermodynamics.parsers.pdf_processing import VLEDataPDFParser
+from src.thermodynamics.parsers.pdf_processing import VLEDataPDFParser
 
 def main():
 
     VLE_data = VLEData(
-        filepath = 'thermodynamics/activity_models_regression/thermo_data/' \
-        'VLE_MeOH_H2O.csv'
+        filepath = os.path.join(os.path.dirname(__file__), 'thermo_data', 'VLE_MeOH_H2O.csv')
     )
     
     nrtl_varying_alpha = partial(NRTLActivityModelRegression, alpha_is_fixed=False, alpha=0.2)

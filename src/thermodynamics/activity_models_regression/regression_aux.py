@@ -12,21 +12,21 @@ from pymoo.optimize import minimize as pymoo_minimize
 
 import sys
 import os
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from thermodynamics.core.properties import EquationOfStateInterface 
-from thermodynamics.core.properties import PureComponentDataBackend
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..')))
+from src.thermodynamics.core.properties import EquationOfStateInterface 
+from src.thermodynamics.core.properties import PureComponentDataBackend
 
-from activity_models_aux import ActivityModelRegressionInterface
-from activity_models_aux import BinaryInteractionParameter
-from optimization import PolynomialExponentialDIPPR, PolynomialElementwiseEstimator, PolynomialInterface
-from optimization import PolynominalFormInterface, AbsoluteForm, NormalizedForm
-from optimization import PymooCallbackHandler, Callback
+from src.thermodynamics.activity_models_regression.activity_models_aux import ActivityModelRegressionInterface
+from src.thermodynamics.activity_models_regression.activity_models_aux import BinaryInteractionParameter
+from src.thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialElementwiseEstimator, PolynomialInterface
+from src.thermodynamics.activity_models_regression.optimization import PolynominalFormInterface, AbsoluteForm, NormalizedForm
+from src.thermodynamics.activity_models_regression.optimization import PymooCallbackHandler, Callback
 # from optimization import DIPPR_polynomial_regression_GA
-from data_handling import VLEData
+from src.thermodynamics.activity_models_regression.data_handling import VLEData
 
-from optimization import PymooPolynomialEstimator
-from optimization import OptimizationVectorMapper
-from optimization import OwnBiasedSampling
+from src.thermodynamics.activity_models_regression.optimization import PymooPolynomialEstimator
+from src.thermodynamics.activity_models_regression.optimization import OptimizationVectorMapper
+from src.thermodynamics.activity_models_regression.optimization import OwnBiasedSampling
 
 from typing import Type
 from enum import Enum

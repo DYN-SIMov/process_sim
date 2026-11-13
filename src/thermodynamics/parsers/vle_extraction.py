@@ -4,14 +4,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
-from thermodynamics.parsers.base import PDFExtractionBackend
-from thermodynamics.parsers.document_model import (
+from src.thermodynamics.parsers.base import PDFExtractionBackend
+from src.thermodynamics.parsers.document_model import (
     DocumentExtraction,
     DocumentMetadata,
     Table,
 )
-from thermodynamics.parsers.grobid_backend import GrobidBackend
-from thermodynamics.parsers.pdf_processing import PDFProcessingPipeline
+from src.thermodynamics.parsers.grobid_backend import GrobidBackend
+from src.thermodynamics.parsers.pdf_processing import PDFProcessingPipeline
 
 
 @dataclass(frozen=True)
