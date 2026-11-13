@@ -4,6 +4,7 @@ import json
 import numpy as np
 from datetime import datetime
 from enum import Enum
+from typing import Any
 
 from chemicals import CAS_from_any
 
@@ -46,10 +47,22 @@ class BIPDatabaseManager:
         self.data = self._load_database()
 
         # activity model and polyomial attributes are used to check compatibility
-        self.activity_model = None
-        self.polynomial = None
+        self.activity_model: ActivityModel | None = None
+        self.polynomial: PolynimalType | None = None
         
         pass
+
+
+    def _get_selected_activity_model(self) -> ActivityModel:
+        if self.activity_model is None:
+            raise RuntimeError(" Activity model is not set. Call add_entry() first. ")
+        return self.activity_model
+
+
+    def _get_selected_polynomial(self) -> PolynimalType:
+        if self.polynomial is None:
+            raise RuntimeError(" Polynomial type is not set. Call add_entry() first. ")
+        return self.polynomial
 
 
     def add_entry(self,
@@ -150,7 +163,7 @@ class BIPDatabaseManager:
         pass
 
 
-    def _load_database(self) -> dict:
+    def _load_database(self) -> dict[str, Any]:
 
         if not os.path.exists(self.database_filepath):
             with open(self.database_filepath, 'w') as f:
@@ -158,7 +171,8 @@ class BIPDatabaseManager:
                 return {}
 
         with open(self.database_filepath, 'r') as f:
-            return json.load(f)
+            database: dict[str, Any] = json.load(f)
+            return database
 
 
     def _get_activity_model_from_estimator(
@@ -183,7 +197,7 @@ class BIPDatabaseManager:
 
     def _get_component_pair_key(self,
                                 component1: str, 
-                                component2: str) -> dict:
+                                component2: str) -> dict[str, str]:
 
         " Method to sort component names in alphabetical order to avoid confusion between (A, B) "
         " and (B, A) component pairs. This method also retrieves components CAS numbers to ensure "
@@ -206,7 +220,7 @@ class BIPDatabaseManager:
     
 
     def _extract_metadata(self,
-                          BIP_estimator: BinaryInteractionParametersRegression) -> dict:
+                          BIP_estimator: BinaryInteractionParametersRegression) -> dict[str, Any]:
         
         component1, component2 = BIP_estimator.VLE_data.components
         VLE_data_source = BIP_estimator.VLE_data.source
@@ -232,8 +246,8 @@ class BIPDatabaseManager:
                     pressure_ub_Pa = datum.pressure_Pa
         # ----------------------------------------------------------------------        
         
-        activity_model = self.activity_model.value
-        polynomial = self.polynomial.value
+        activity_model = self._get_selected_activity_model().value
+        polynomial = self._get_selected_polynomial().value
 
         polynomial_equation_str = BIP_estimator.polynomial.polynomial.equation_str
         eos_backend = BIP_estimator.eos_backend.__class__.__name__
@@ -262,7 +276,7 @@ class BIPDatabaseManager:
 
     def _extract_BIP_data(self,
                           BIP_estimator: BinaryInteractionParametersRegression,
-                          name_key: str) -> dict:
+                          name_key: str) -> dict[str, Any]:
 
         regressed_BIPs = BIP_estimator.result_to_save['regressed_BIPs']
 
@@ -277,7 +291,7 @@ class BIPDatabaseManager:
                 swapped_BIPs.extend([regressed_BIPs[k+1], regressed_BIPs[k]])
             regressed_BIPs = swapped_BIPs
         
-        BIP_data = {}
+        BIP_data: dict[str, Any] = {}
         for bip in regressed_BIPs:
 
             # guard against numpy data types that are not JSON serializable
@@ -325,7 +339,7 @@ class BIPDatabaseManager:
     
     def _check_model_compatibility(self) -> None:
         
-        if self.activity_model.value not in self.data.keys():
+        if self._get_selected_activity_model().value not in self.data.keys():
             raise ValueError(
                 f" The specified activity model {self.activity_model} is not compatible with the"
                 f" existing database structure. \n"
@@ -339,23 +353,23 @@ class BIPDatabaseManager:
 
         overwrite_attempt = False
 
-        if name_key in self.data[self.activity_model.value]:
+        if name_key in self.data[self._get_selected_activity_model().value]:
             if not force_overwrite:
                 overwrite_attempt = True
                 if not self._offer_overwrite(name_key, CAS_key):
                     raise OverwriteAttemptError(
                         f" An entry for the component pair {name_key} already exists under the"
-                        f" activity model {self.activity_model.value}." 
+                        f" activity model {self._get_selected_activity_model().value}." 
                     )        
             
         if (not overwrite_attempt and 
-            CAS_key in self.data[self.activity_model.value]):
+            CAS_key in self.data[self._get_selected_activity_model().value]):
             if not force_overwrite:
                 overwrite_attempt = True
                 if not self._offer_overwrite(name_key, CAS_key):
                     raise OverwriteAttemptError(
                         f" An entry for the component pair with CAS numbers {CAS_key} already exists "
-                        f" under the activity model {self.activity_model.value}."
+                        f" under the activity model {self._get_selected_activity_model().value}."
                     )
 
         pass
@@ -367,14 +381,14 @@ class BIPDatabaseManager:
         
         force_overwrite_input = input(
             f" An entry for the component pair {name_key} already exists under the"
-            f" activity model {self.activity_model.value}. \n"
+            f" activity model {self._get_selected_activity_model().value}. \n"
             f" Do you want to overwrite the existing entry? (y/n): "
         )
         if force_overwrite_input.lower() == 'y':
             return True
         else:
             print(colored(
-                f" Entry for {name_key} under {self.activity_model.value} was not overwritten. ", 'yellow'
+                f" Entry for {name_key} under {self._get_selected_activity_model().value} was not overwritten. ", 'yellow'
             ))
             return False
 
@@ -382,16 +396,16 @@ class BIPDatabaseManager:
     def _insert_entry(self,
                       name_key: str,
                       CAS_key: str,
-                      metadata: dict,
-                      BIP_data: dict) -> None: 
+                      metadata: dict[str, Any],
+                      BIP_data: dict[str, Any]) -> None: 
         
         entry = {
             'metadata': metadata,
             'BIP_data': BIP_data,
         }
 
-        self.data[self.activity_model.value][name_key] = entry
-        self.data[self.activity_model.value][CAS_key] = entry
+        self.data[self._get_selected_activity_model().value][name_key] = entry
+        self.data[self._get_selected_activity_model().value][CAS_key] = entry
 
         pass
 
@@ -404,13 +418,13 @@ class BIPDatabaseManager:
         print(colored(f" Database successfully updated and saved to {self.database_filepath}.", 'green'))
     
 
-    def get_entry_by_name(self):
+    def get_entry_by_name(self) -> None:
 
 
         pass
 
 
-    def get_entry_by_CAS(self):
+    def get_entry_by_CAS(self) -> None:
 
 
         pass 

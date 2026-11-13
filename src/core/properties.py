@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Protocol
+from typing import Any, Protocol
 
 from chemicals import CAS_from_any
 from chemicals import MW as MW_data_import
@@ -37,6 +37,10 @@ class EquationOfStateInterface(Protocol):
     name: str
     components: tuple[str, ...]       
     pure_component_data_backend: PureComponentDataBackend
+
+    def __init__(self,
+                 components: tuple[str, ...],
+                 pure_component_data_backend: PureComponentDataBackend) -> None: ...
     
     def get_fugacity_coefs(self,
                            temperature_K: float, 
@@ -44,6 +48,7 @@ class EquationOfStateInterface(Protocol):
                            molar_composition: np.ndarray) -> np.ndarray: ...
 
     def get_compressibility_factor(self, 
+                                   phase: str,
                                    temperature_K: float,
                                    pressure_Pa: float,
                                    molar_composition: np.ndarray) -> float: ...
@@ -60,11 +65,15 @@ class ActivityModelInterface(Protocol):
     """ Common interface for activity model backends. """
     name: str
     components: tuple[str, ...]       
+
+    def __init__(self,
+                 components: tuple[str, ...],
+                 pure_component_data_backend: PureComponentDataBackend) -> None: ...
     
-    def get_activity(self, 
-                     temperature_K: float,
-                     pressure_Pa: float,
-                     molar_composition: np.ndarray) -> np.ndarray: ...
+    def get_effective_activity_coefs(self, 
+                                     temperature_K: float,
+                                     pressure_Pa: float,
+                                     molar_composition: np.ndarray) -> np.ndarray: ...
     
 
 
@@ -74,8 +83,17 @@ class PropertyPackageInterface(Protocol):
     """ Common interface for property packages. """
     eos_backend: EquationOfStateInterface
     activity_model_backend: ActivityModelInterface
+    components: tuple[str, ...]
 
-    def _TPD_stability_test(self): ...
+    def _TPD_stability_test(self,
+                            temperature_K: float,
+                            pressure_Pa: float,
+                            molar_composition: np.ndarray) -> bool: ...
+
+    def TP_flash(self,
+                 temperature_K: float,
+                 pressure_Pa: float,
+                 molar_composition: np.ndarray) -> None: ...
     
 
 
@@ -86,8 +104,8 @@ class GammaPhiPackage():
 
     """ Property package to calculate VLE using activity and EOS models. """
     def __init__(self, 
-                 eos_backend: EquationOfStateInterface,
-                 activity_model_backend: ActivityModelInterface,
+                 eos_backend: type[EquationOfStateInterface],
+                 activity_model_backend: type[ActivityModelInterface],
                  components: tuple[str, ...]):
         
         pure_component_data_backend = PureComponentDataBackend(components = components)
@@ -170,13 +188,13 @@ class SoaveRedlichKwongEoSBackend():
                  pure_component_data_backend: PureComponentDataBackend):
         self.components = components
         self.pure_component_data_backend = pure_component_data_backend
-        self._cache = {}
+        self._cache: dict[tuple[float, float, tuple[float, ...]], dict[str, Any]] = {}
 
     
     def _get_SRK_parameters(self, 
                             temperature_K: float, 
                             pressure_Pa: float, 
-                            molar_composition: np.ndarray) -> dict:
+                            molar_composition: np.ndarray) -> dict[str, Any]:
         
         " This method calculates SRK EOS parameters (a, b, A, B). "
 
@@ -249,7 +267,14 @@ class SoaveRedlichKwongEoSBackend():
         if Z_val is None:
             raise ValueError("No physically meaningful compressibility factor found")
 
-        return Z_val
+        return float(Z_val)
+
+
+    def get_density_SI(self,
+                       temperature_K: float,
+                       pressure_Pa: float,
+                       molar_composition: np.ndarray) -> float:
+        raise NotImplementedError("Density calculation is not implemented for the SRK backend yet.")
     
 
     def get_fugacity_coefs(self, 
@@ -280,7 +305,7 @@ class SoaveRedlichKwongEoSBackend():
 
         phi_log = b_ratio * (Z_val - 1) - np.log(Z_val - B_mix) - A_mix / B_mix * (2 * alpha_ratio - b_ratio) * np.log(1 + B_mix / Z_val)
         
-        fugacity_coefs = np.exp(phi_log)
+        fugacity_coefs: np.ndarray = np.exp(phi_log)
         return fugacity_coefs
         
 
@@ -295,12 +320,12 @@ class WilsonActivityModel():
                  pure_component_data_backend: PureComponentDataBackend):
         self.components = components
         self.pure_component_data_backend = pure_component_data_backend
-        self._cache = {}
+        self._cache: dict[tuple[float, float, tuple[float, ...]], Any] = {}
         
 
     def _components_screening(self,
-                             temperature_K,
-                             pressure_Pa) -> list[str]:
+                             temperature_K: float,
+                             pressure_Pa: float) -> list[str]:
 
         " This method screens components for Wilson activity model applicability. "
         " The method returns a list of strings in which each entry corresponds to the law that is applicable for each component"
@@ -378,7 +403,7 @@ class NRTLActivityModel():
                  pure_component_data_backend: PureComponentDataBackend):
         self.components = components
         self.pure_component_data_backend = pure_component_data_backend
-        self._cache = {}
+        self._cache: dict[tuple[float, float, tuple[float, ...]], Any] = {}
 
     def get_effective_activity_coefs(self,
                                    temperature_K: float,

@@ -14,7 +14,7 @@ from functools import partial
 
 from thermodynamics.parsers.pdf_processing import VLEDataPDFParser
 
-def main():
+def main() -> None:
 
     VLE_data = VLEData(
         filepath = os.path.join(os.path.dirname(__file__), 'thermo_data', 'VLE_MeOH_H2O.csv')

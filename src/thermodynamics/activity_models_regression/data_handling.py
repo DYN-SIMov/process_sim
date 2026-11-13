@@ -38,8 +38,8 @@ class TxyPoint():
                  data_points: list[DataPoint]):
         self.data = data_points
         self.temperature_K: float = data_points[0].temperature_K    
-        self.comp_1_saturation_pressure_Pa: float = None
-        self.comp_2_saturation_pressure_Pa: float = None
+        self.comp_1_saturation_pressure_Pa: float | None = None
+        self.comp_2_saturation_pressure_Pa: float | None = None
 
     pass
 
@@ -74,7 +74,7 @@ class RawExperimentalData(list[DataPoint]):
 
     def find_constant_temperature_points(self, temperature_K_tol: float = 1e-3) -> list[TxyPoint]: 
         T_x_y_points = []
-        constant_temperature_points = []
+        constant_temperature_points: list[DataPoint] = []
         if not self.data_points:
             raise VLEDataError(" No data points available to search for constant temperature points. ")
  
@@ -164,8 +164,9 @@ class VLEData():
 
         with open(filepath, "r") as f:
             for line in f:
-                if pattern.match(line):
-                    source = pattern.match(line).group(2).strip() 
+                match = pattern.match(line)
+                if match:
+                    source = match.group(2).strip() 
                     break
         return source
 
@@ -279,7 +280,7 @@ class VLEData():
                    f" supported by Thermo package. ")
             print(colored(msg, 'yellow'))
             success = False
-            return [float('nan'), success]
+            return (float('nan'), success)
 
         vp = component.VaporPressure
         if temperature_K < vp.Tmin or temperature_K > vp.Tmax:  
@@ -292,15 +293,15 @@ class VLEData():
 
             skip_data_point_input = input(" Do you want to skip this data point? (y/n): ")
             if skip_data_point_input.lower() == 'y':
-                return [float('nan'), success]
+                return (float('nan'), success)
             elif skip_data_point_input.lower() == 'n':    
                 saturation_pressure_Pa = component.Psat
-                return [saturation_pressure_Pa, success]      
+                return (saturation_pressure_Pa, success)      
             else: 
                 print(colored(" Invalid input. Skipping this data point by default. ", 'yellow'))
-                return [float('nan'), success]
+                return (float('nan'), success)
 
-        return [saturation_pressure_Pa, success]
+        return (saturation_pressure_Pa, success)
     
 
     def _get_saturation_pressure_CoolProp(self, 
@@ -312,7 +313,7 @@ class VLEData():
                 'P', 'T', temperature_K, 'Q', 1, CAS_from_any(component_name)
             )
             success = True
-            return [saturation_pressure_Pa, success]
+            return (saturation_pressure_Pa, success)
         
         except ValueError:
             msg = (f"Data import [warning]: "
@@ -322,5 +323,5 @@ class VLEData():
                    f" temperature. No fallback available, skipping this data point.")
             print(colored(msg, 'yellow'))
             success = False
-            return [float('nan'), success]
+            return (float('nan'), success)
         

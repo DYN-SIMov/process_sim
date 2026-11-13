@@ -2,6 +2,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import requests
 
@@ -110,9 +111,9 @@ class PDFParser():
 
 
     def _get_running_container(self,
-                               container_name: str | None = None,
-                               resolved_port: int | None = None,
-                               dry_run: bool = False) -> None:
+                               container_name: str,
+                               resolved_port: int,
+                               dry_run: bool = False) -> tuple[list[str] | subprocess.CompletedProcess[str], int]:
 
         if dry_run:
             docker_command = [
@@ -236,7 +237,7 @@ class PDFParser():
             that should be used to reach the container.
         """
 
-        if self._check_if_container_exists(container_name): 
+        if container_name is not None and self._check_if_container_exists(container_name): 
             resolved_port = self._get_container_host_port(container_name, container_port) or local_port
 
             if self._is_container_running(container_name):
@@ -268,7 +269,7 @@ class PDFParser():
 
 class VLEDataPDFParser(PDFParser): 
 
-    def __init__(self): 
+    def __init__(self) -> None: 
         super().__init__()
 
         self._verify_docker_is_available()
@@ -311,7 +312,7 @@ class VLEDataPDFParser(PDFParser):
         )
 
 
-    def _send_pdf_to_grobid_via_http(self, pdf_path: str | Path) -> dict:
+    def _send_pdf_to_grobid_via_http(self, pdf_path: str | Path) -> dict[str, Any]:
 
         """  
         Ref general: https://grobid.readthedocs.io/en/latest/Grobid-service/
@@ -349,7 +350,7 @@ class VLEDataPDFParser(PDFParser):
 
 
 
-    def _extract_VLE_data_from_tei_xml(self, tei_xml: str) -> dict:
+    def _extract_VLE_data_from_tei_xml(self, tei_xml: str) -> dict[str, Any]:
 
         xml_parser = XMLParser(xml_file=tei_xml)
         metadata = xml_parser.get_metadata()
@@ -359,7 +360,7 @@ class VLEDataPDFParser(PDFParser):
 
 
 
-    def get_VLE_data_from_pdf(self, pdf_path: str | Path) -> None: 
+    def get_VLE_data_from_pdf(self, pdf_path: str | Path) -> dict[str, Any]: 
 
         grobid_output = self._send_pdf_to_grobid_via_http(pdf_path)
         tei_xml = grobid_output["tei_xml"]

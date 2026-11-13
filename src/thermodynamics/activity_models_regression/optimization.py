@@ -1,6 +1,8 @@
 """
 Module to store all classess and functions related to configuring optimization algorithms
 """
+from __future__ import annotations
+
 import numpy as np
 
 from scipy.optimize import minimize as scipy_minimize
@@ -14,10 +16,20 @@ from pymoo.optimize import minimize as pymoo_minimize
 from joblib import Parallel as JoblibParallel
 from joblib import delayed as joblib_delayed
 
-from typing import Protocol
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Protocol, cast
 from enum import Enum
 
 from pymoo.operators.sampling.rnd import FloatRandomSampling
+
+if TYPE_CHECKING:
+    from pymoo.core.algorithm import Algorithm
+    from scipy.optimize import OptimizeResult
+    from thermodynamics.activity_models_regression.activity_models_aux import (
+        ActivityModelRegressionInterface,
+        BinaryInteractionParameter,
+    )
+    from thermodynamics.activity_models_regression.data_handling import VLEData
 
 
 class LocalOptimizationMethod(Enum):
@@ -39,45 +51,38 @@ class LocalOptimizationError(RuntimeError):
 
 class PolynomialInterface(Protocol): 
     """ Protocol for polynomial forms to be used in the regression of BIP parameters. """
-    
-    def __init__(self,
-                 degree: int):
-        self.degree = degree
-        self.equation_str = None
+
+    degree: int
+    equation_str: str
 
     def evaluate(self,
-                 temperature_K: np.ndarray,
-                 coeffs: np.ndarray) -> np.ndarray:
-        pass
+                 temperature_K: float,
+                 coeffs: np.ndarray) -> float: ...
 
-    def get_bounds_scipy(self) -> tuple:
-        pass
+    def get_bounds_scipy(self) -> tuple[tuple[float, float], ...]: ...
 
-    def initial_guess_scipy(self) -> np.ndarray:
-        pass
+    def get_initial_guess_scipy(self) -> np.ndarray: ...
 
 
 
 class PolynominalFormInterface(Protocol):
     """ Protocol for the form of the polynomial to be used in the regression of BIP parameters."""
 
+    polynomial: PolynomialInterface
+    degree: int
+
     def __init__(self,
-                 polynomial: PolynomialInterface):
-        pass
+                 polynomial: PolynomialInterface) -> None: ...
 
     def evaluate(self,
-                 temperature_K: np.ndarray,
-                 coeffs: np.ndarray) -> np.ndarray:
-        pass
+                 temperature_K: float,
+                 coeffs: np.ndarray) -> float: ...
 
-    def get_bounds_scipy(self) -> tuple:
-        pass
+    def get_bounds_scipy(self) -> tuple[tuple[float, float], ...]: ...
 
-    def get_initial_guess_scipy(self) -> np.ndarray:
-        pass
+    def get_initial_guess_scipy(self) -> np.ndarray: ...
 
-    def get_absolute_coeffs(self, coeffs: np.ndarray) -> np.ndarray:
-        pass
+    def get_absolute_coeffs(self, coeffs: np.ndarray) -> np.ndarray: ...
 
 
 class AbsoluteForm(PolynominalFormInterface):
@@ -96,12 +101,12 @@ class AbsoluteForm(PolynominalFormInterface):
 
 
     def evaluate(self,
-                 temperature_K: np.ndarray,
-                 coeffs: np.ndarray) -> np.ndarray:
+                 temperature_K: float,
+                 coeffs: np.ndarray) -> float:
         return self.polynomial.evaluate(temperature_K=temperature_K, coeffs=coeffs)
 
 
-    def get_bounds_scipy(self) -> tuple:
+    def get_bounds_scipy(self) -> tuple[tuple[float, float], ...]:
         return self.scipy_bounds
 
 
@@ -137,14 +142,14 @@ class NormalizedForm(PolynominalFormInterface):
 
 
     def evaluate(self,
-                 temperature_K: np.ndarray,
-                 coeffs: np.ndarray) -> np.ndarray:
+                 temperature_K: float,
+                 coeffs: np.ndarray) -> float:
         
         denormalized_coeffs = self._denormalize_coeffs(coeffs)
         return self.polynomial.evaluate(temperature_K=temperature_K, coeffs=denormalized_coeffs) 
 
 
-    def get_bounds_scipy(self) -> tuple:
+    def get_bounds_scipy(self) -> tuple[tuple[float, float], ...]:
         return self.scipy_bounds
     
 
@@ -152,7 +157,7 @@ class NormalizedForm(PolynominalFormInterface):
         return self.initial_guess
     
 
-    def get_absolute_coeffs(self, coeffs):
+    def get_absolute_coeffs(self, coeffs: np.ndarray) -> np.ndarray:
         return self._denormalize_coeffs(coeffs)
 
 
@@ -197,8 +202,8 @@ class PolynomialExponentialDIPPR(PolynomialInterface):
 
 
     def evaluate(self,
-                 temperature_K: np.ndarray,
-                 coeffs: np.ndarray) -> np.ndarray:
+                 temperature_K: float,
+                 coeffs: np.ndarray) -> float:
         """
         Method to evaluate the DIPPR polynomial with exponential term
         """
@@ -211,10 +216,11 @@ class PolynomialExponentialDIPPR(PolynomialInterface):
                      C*np.log(T) + 
                      D*T)
 
-        return np.exp(ln_lambda)
+        BIP_value: float = np.exp(ln_lambda)
+        return BIP_value
     
 
-    def get_bounds_scipy(self) -> tuple:
+    def get_bounds_scipy(self) -> tuple[tuple[float, float], ...]:
         """
         Method to get bounds for the DIPPR polynomial coefficients for scipy optimization
         """
@@ -253,8 +259,8 @@ class PolynomialNRTL(PolynomialInterface):
 
 
     def evaluate(self,
-                 temperature_K: np.ndarray,
-                 coeffs: np.ndarray) -> np.ndarray:
+                 temperature_K: float,
+                 coeffs: np.ndarray) -> float:
         """
         Method to evaluate the DIPPR polynomial with exponential term
         """
@@ -262,12 +268,12 @@ class PolynomialNRTL(PolynomialInterface):
         T = temperature_K
         A,B,C,D = coeffs
 
-        tau = A + B/T + C*np.log(T) + D*T
+        tau: float = A + B/T + C*np.log(T) + D*T
 
         return tau
     
 
-    def get_bounds_scipy(self) -> tuple:
+    def get_bounds_scipy(self) -> tuple[tuple[float, float], ...]:
         """
         Method to get bounds for the DIPPR polynomial coefficients for scipy optimization
         """
@@ -305,8 +311,8 @@ class PolynomialRegular(PolynomialInterface):
 
 
     def evaluate(self,
-                 temperature_K: np.ndarray,
-                 coeffs: np.ndarray) -> np.ndarray:
+                 temperature_K: float,
+                 coeffs: np.ndarray) -> float:
         """
         Method to evaluate the regular polynomial
         """
@@ -314,7 +320,7 @@ class PolynomialRegular(PolynomialInterface):
         T = temperature_K
         A,B,C,D = coeffs
 
-        lambda_ij = (A + 
+        lambda_ij: float = (A + 
                      B*T + 
                      C*T**2 + 
                      D*T**3)
@@ -322,7 +328,7 @@ class PolynomialRegular(PolynomialInterface):
         return lambda_ij
     
 
-    def get_bounds_scipy(self) -> tuple:
+    def get_bounds_scipy(self) -> tuple[tuple[float, float], ...]:
         """
         Method to get bounds for the regular polynomial coefficients for scipy optimization
         """
@@ -349,9 +355,9 @@ class PolynomialRegular(PolynomialInterface):
 class PolynomialElementwiseEstimator():
 
     def __init__(self,
-                 temperature_K_data: np.ndarray,
+                 temperature_K_data: Sequence[float],
                  BIP_elementwise_results: np.ndarray,
-                 polynomial:PolynomialInterface):
+                 polynomial: PolynominalFormInterface):
         self.temperature_K_data = temperature_K_data
         self.BIP_elementwise_results = BIP_elementwise_results
         self.polynomial = polynomial
@@ -368,7 +374,7 @@ class PolynomialElementwiseEstimator():
 
         try:
             with np.errstate(invalid="raise", divide="raise", over="raise"):
-                error_data = []
+                error_data: list[float] = []
                 for k in range(len(self.temperature_K_data)):
                     BIP_ij_exp  = self.BIP_elementwise_results[k, current_BIP_count]
                     BIP_ij_calc = self.polynomial.evaluate(
@@ -384,7 +390,7 @@ class PolynomialElementwiseEstimator():
             return 1e20
 
 
-    def estimate_coefficients(self) -> list:
+    def estimate_coefficients(self) -> list[OptimizeResult]:
 
         BIP_coeffs_estimation_results = []
 
@@ -412,7 +418,7 @@ class PolynomialElementwiseEstimator():
     
 
     @staticmethod
-    def _optimization_converged(opt_result) -> bool: 
+    def _optimization_converged(opt_result: OptimizeResult) -> bool: 
 
         condition = (
             opt_result.success or
@@ -430,13 +436,13 @@ class PolynomialElementwiseEstimator():
 class PymooPolynomialEstimator(Problem):
     
     def __init__(self, 
-                 parameter_mapper, 
-                 objective_function,
-                 VLE_data,
-                 polynomial,
-                 n_jobs = 1,
-                 backend = 'loky', 
-                 **kwargs):
+                 parameter_mapper: OptimizationVectorMapper, 
+                 objective_function: Callable[..., float],
+                 VLE_data: VLEData,
+                 polynomial: PolynominalFormInterface,
+                 n_jobs: int = 1,
+                 backend: str = 'loky', 
+                 **kwargs: Any):
         
         self.parameter_mapper = parameter_mapper
         self.objective_function = objective_function
@@ -460,7 +466,7 @@ class PymooPolynomialEstimator(Problem):
         )
 
 
-    def _evaluate_with_warnings(self, coeffs:np.ndarray): 
+    def _evaluate_with_warnings(self, coeffs: np.ndarray) -> float: 
 
         """
         Runs objective function catching numpy warnins. 
@@ -484,7 +490,7 @@ class PymooPolynomialEstimator(Problem):
             return 1e20
 
 
-    def _evaluate(self, X, out, *args, **kwargs):
+    def _evaluate(self, X: np.ndarray, out: dict[str, Any], *args: Any, **kwargs: Any) -> None:
 
         F = JoblibParallel(n_jobs=self.n_jobs, backend=self.backend)(
             joblib_delayed(self._evaluate_with_warnings)(x) for x in X)
@@ -516,7 +522,7 @@ class PymooCallbackHandler(Callback):
         pass
 
 
-    def notify(self, algorithm) -> None:
+    def notify(self, algorithm: Algorithm) -> None:
 
         """
         Callback function to be implemented for memetic optimization in pymoo.
@@ -531,7 +537,7 @@ class PymooCallbackHandler(Callback):
         pass
 
 
-    def _run_memetic_optimization(self, algorithm):
+    def _run_memetic_optimization(self, algorithm: Algorithm) -> dict[str, Any]:
 
         " Method to run local optimization for the best candidates in the population. "
 
@@ -566,10 +572,10 @@ class PymooCallbackHandler(Callback):
 
 
     def _run_local_optimization(self, 
-                                algorithm,
+                                algorithm: Algorithm,
                                 theta_initial: np.ndarray, 
                                 local_optimizer_method: LocalOptimizationMethod, 
-                                local_optimizer_maxiter: int) -> dict:
+                                local_optimizer_maxiter: int) -> dict[str, Any]:
 
         " Method to run local optimization for a single candidate. "
 
@@ -603,8 +609,8 @@ class PymooCallbackHandler(Callback):
     
 
     def _update_candidates_in_population(self, 
-                                         algorithm,
-                                         memetic_results: dict) -> None:
+                                         algorithm: Algorithm,
+                                         memetic_results: dict[str, Any]) -> None:
 
         " Method to update the candidate in the population with the optimized values. "
 
@@ -651,7 +657,7 @@ class PymooCallbackHandler(Callback):
 
 
     @staticmethod
-    def _local_optimization_converged(local_opt_result) -> bool: 
+    def _local_optimization_converged(local_opt_result: OptimizeResult) -> bool: 
 
         condition = (
             local_opt_result.success or
@@ -666,7 +672,7 @@ class PymooCallbackHandler(Callback):
 class OwnBiasedSampling(FloatRandomSampling):
 
     def __init__(self,
-                 BIP_config: list,
+                 BIP_config: list[BinaryInteractionParameter],
                  fraction_of_biased_samples: float = 0.5,
                  bias_strength: float = 0.5,
                  seed: int = 42):
@@ -682,22 +688,22 @@ class OwnBiasedSampling(FloatRandomSampling):
 
     def _get_initial_guess(self) -> np.ndarray:
 
-        initial_guess = []
+        initial_guess: list[float] = []
         for bip in self.BIP_config:
             if bip.is_regressed and bip.is_temperature_dependant:
-                initial_guess.extend(bip.value)
+                initial_guess.extend(np.asarray(bip.value))
             elif bip.is_regressed and not bip.is_temperature_dependant:
-                initial_guess.append(bip.value)
+                initial_guess.append(cast(float, bip.value))
 
         return np.array(initial_guess)
 
 
     def _do(self, 
-            problem, 
-            n_samples,
-            random_state=None,
-            *args,
-            **kwargs
+            problem: Problem, 
+            n_samples: int,
+            random_state: np.random.Generator | None = None,
+            *args: Any,
+            **kwargs: Any
         ) -> np.ndarray:    
 
         n_biased = int(n_samples * self.fraction_of_biased_samples)
@@ -728,8 +734,8 @@ class OwnBiasedSampling(FloatRandomSampling):
 class OptimizationVectorMapper(): 
 
     def __init__(self,
-                 activity_model,
-                 polynomial):
+                 activity_model: ActivityModelRegressionInterface,
+                 polynomial: PolynominalFormInterface):
         self.activity_model = activity_model
         self.polynomial = polynomial
 
@@ -739,7 +745,10 @@ class OptimizationVectorMapper():
         pass
 
 
-    def elementwise_regression_adapter(self, optimization_vector: np.ndarray) -> np.ndarray:
+    def elementwise_regression_adapter(
+            self,
+            optimization_vector: np.ndarray | list[float]
+        ) -> np.ndarray | list[float]:
 
         """  
         This method is needed to adapt the input for the activity calculation regression for 
@@ -760,10 +769,10 @@ class OptimizationVectorMapper():
         return optimization_vector
 
 
-    def get_pymoo_config(self) -> dict: 
+    def get_pymoo_config(self) -> dict[str, Any]: 
 
-        lower_bounds = []
-        upper_bounds = []
+        lower_bounds: list[float | None] = []
+        upper_bounds: list[float | None] = []
 
         for bip in self.activity_model.BIPs: 
             if not bip.is_regressed:
@@ -774,6 +783,8 @@ class OptimizationVectorMapper():
                 lower_bounds.extend([bounds_tuple[k][0] for k in range(len(bounds_tuple))])
                 upper_bounds.extend([bounds_tuple[k][1] for k in range(len(bounds_tuple))])
             else:
+                if bip.bounds is None:
+                    raise ValueError(f"Bounds must be specified for regressed parameter {bip.name}.")
                 lower_bounds.append(bip.bounds[0])
                 upper_bounds.append(bip.bounds[1])
 
@@ -788,9 +799,9 @@ class OptimizationVectorMapper():
         return config
 
 
-    def decode_pymoo_vector(self, optimization_vector) -> list: 
+    def decode_pymoo_vector(self, optimization_vector: np.ndarray) -> dict[str, np.ndarray | float]: 
 
-        decoded_map = {}
+        decoded_map: dict[str, np.ndarray | float] = {}
         param_ind = 0
         degree = self.polynomial.degree
 

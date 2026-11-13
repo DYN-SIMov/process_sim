@@ -1,37 +1,71 @@
+from __future__ import annotations
+
 import numpy as np
 
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 from termcolor import colored
-from core.properties import WilsonActivityModel, NRTLActivityModel
+from core.properties import WilsonActivityModel, NRTLActivityModel, PureComponentDataBackend
+
+if TYPE_CHECKING:
+    from scipy.optimize import OptimizeResult
+    from thermodynamics.activity_models_regression.optimization import PolynominalFormInterface
+
+
+ParameterBounds = tuple[float | None, float | None]
+
 
 @dataclass
 class BinaryInteractionParameter():
     name: str
-    value: float
+    # None until regressed; ndarray of polynomial coefficients for temperature dependant BIPs
+    value: float | np.ndarray | None
     initial_guess: float
-    bounds: tuple
+    bounds: ParameterBounds | None
     is_temperature_dependant: bool
     is_regressed: bool 
 
 
 class ActivityModelRegressionInterface(Protocol):
 
-    @staticmethod
-    def get_activity_coefs(*args, **kwargs) -> np.ndarray:
-        pass
+    BIPs: list[BinaryInteractionParameter]
 
-    @staticmethod
-    def get_message_elementwise(regression_params: dict,
+    def __init__(self,
+                 components: tuple[str, ...],
+                 pure_component_data_backend: PureComponentDataBackend) -> None: ...
+
+    def get_activity_coefs(self,
+                           BIP_coeffs: np.ndarray | list[float],
+                           x_val: float) -> tuple[float, float]: ...
+
+    def initial_guess_elementwise(self, initial_guess: np.ndarray | None) -> np.ndarray: ...
+
+    def get_bounds_elementwise(self) -> tuple[ParameterBounds | None, ...]: ...
+
+    def get_temp_dependant_BIPs(self) -> list[BinaryInteractionParameter]: ...
+
+    def get_temp_independant_BIPs(self) -> list[BinaryInteractionParameter]: ...
+
+    def get_message_elementwise(self,
+                                regression_params: dict[str, Any],
                                 components: list[str],
-                                result) -> None:
-        pass
+                                result: OptimizeResult) -> None: ...
+
+    def get_polynomial_coeffs_estimation_message(self,
+                                                 estimation_results: list[OptimizeResult],
+                                                 polynomial: PolynominalFormInterface) -> None: ...
+
+    def get_message_estimation_from_VLE(self,
+                                        decoded_bip_data: dict[str, np.ndarray | float],
+                                        polynomial: PolynominalFormInterface,
+                                        total_residual: float) -> None: ...
 
 
 class RegressionAuxiliariesMixin(): 
 
+    BIPs: list[BinaryInteractionParameter]
 
     def get_BIP_names(self) -> list[str]:
         names = []
@@ -40,7 +74,7 @@ class RegressionAuxiliariesMixin():
         return names
 
 
-    def initial_guess_elementwise(self, initial_guess) -> np.ndarray:
+    def initial_guess_elementwise(self, initial_guess: np.ndarray | None) -> np.ndarray:
         
         """
         Method to specify initial guess input for the elementwise estimation of Wilson BIPs
@@ -49,14 +83,14 @@ class RegressionAuxiliariesMixin():
         if initial_guess is not None: 
             return initial_guess
         
-        initial_guess = [] 
+        initial_guess_list = [] 
         for bip in self.BIPs:
             if bip.is_regressed and bip.is_temperature_dependant:
-                initial_guess.append(bip.initial_guess)
-        return np.array(initial_guess)
+                initial_guess_list.append(bip.initial_guess)
+        return np.array(initial_guess_list)
         
     
-    def get_bounds_elementwise(self) -> tuple:
+    def get_bounds_elementwise(self) -> tuple[ParameterBounds | None, ...]:
 
         """
         Method to get bounds for elementwise estimation of Wilson BIP
@@ -100,7 +134,7 @@ class RegressionAuxiliariesMixin():
         return temp_independant_BIPs
     
 
-    def get_bip_index_map(self) -> dict:
+    def get_bip_index_map(self) -> dict[str, int]:
         """
         Creates a map of index positions for parameters as they will 
         appear in the 1D regression vector.
@@ -115,9 +149,9 @@ class RegressionAuxiliariesMixin():
 
 
     def get_message_elementwise(self,
-                                regression_params: dict,
+                                regression_params: dict[str, Any],
                                 components: list[str],
-                                result) -> None:
+                                result: OptimizeResult) -> None:
 
         temperature_K = regression_params['temperature_K']
         pressure_atm  = np.divide(regression_params['pressure_Pa'], 1e5)
@@ -153,7 +187,9 @@ class RegressionAuxiliariesMixin():
         print(msg)
 
 
-    def get_polynomial_coeffs_estimation_message(self, estimation_results: list, polynomial) -> None:
+    def get_polynomial_coeffs_estimation_message(self,
+                                                 estimation_results: list[OptimizeResult],
+                                                 polynomial: PolynominalFormInterface) -> None:
 
         model_name = self.__class__.__name__
         poly_name = polynomial.polynomial.__class__.__name__
@@ -174,8 +210,8 @@ class RegressionAuxiliariesMixin():
 
 
     def get_message_estimation_from_VLE(self,
-                                         decoded_bip_data: dict,
-                                         polynomial,
+                                         decoded_bip_data: dict[str, np.ndarray | float],
+                                         polynomial: PolynominalFormInterface,
                                          total_residual: float) -> None:
 
         model_name = self.__class__.__name__
@@ -187,7 +223,7 @@ class RegressionAuxiliariesMixin():
             if not bip.is_regressed:
                 continue
             if bip.is_temperature_dependant:
-                coeffs = decoded_bip_data[bip.name]
+                coeffs = np.asarray(decoded_bip_data[bip.name])
                 coeff_strs = [f"{letters[i]} = {coeffs[i]:.4f}" for i in range(len(coeffs))]
                 bip_msgs.append(
                     f" Fitted coefficients for {bip.name}: " + ", ".join(coeff_strs) + ". "
@@ -207,8 +243,8 @@ class WilsonActivityModelRegression(WilsonActivityModel, RegressionAuxiliariesMi
     
 
     def __init__(self,
-                 components,
-                 pure_component_data_backend):
+                 components: tuple[str, ...],
+                 pure_component_data_backend: PureComponentDataBackend):
         super().__init__(components=components,
                          pure_component_data_backend=pure_component_data_backend)
         
@@ -236,8 +272,8 @@ class WilsonActivityModelRegression(WilsonActivityModel, RegressionAuxiliariesMi
 
 
     def get_activity_coefs(self, 
-                           BIP_coeffs: np.ndarray,
-                           x_val: np.ndarray) -> np.ndarray:
+                           BIP_coeffs: np.ndarray | list[float],
+                           x_val: float) -> tuple[float, float]:
 
         """
         Method to get activity coeffcients (gamma_1 and gamma_2) based on Wilson equation
@@ -271,8 +307,8 @@ class WilsonActivityModelRegression(WilsonActivityModel, RegressionAuxiliariesMi
 class NRTLActivityModelRegression(NRTLActivityModel, RegressionAuxiliariesMixin): 
 
     def __init__(self,
-                 components,
-                 pure_component_data_backend,
+                 components: tuple[str, ...],
+                 pure_component_data_backend: PureComponentDataBackend,
                  alpha_is_fixed:bool = True,
                  alpha:float = 0.3):
         super().__init__(components=components,
@@ -324,8 +360,8 @@ class NRTLActivityModelRegression(NRTLActivityModel, RegressionAuxiliariesMixin)
 
 
     def get_activity_coefs(self, 
-                           BIP_coeffs: np.ndarray,
-                           x_val: np.ndarray) -> np.ndarray:
+                           BIP_coeffs: np.ndarray | list[float],
+                           x_val: float) -> tuple[float, float]:
 
         """
         Method to get activity coeffcients (gamma_1 and gamma_2) based on NRTL equation

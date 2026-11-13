@@ -5,7 +5,7 @@ import xml.etree.ElementTree as ET
 
 @dataclass(frozen=True)
 class TableCell: 
-    content: str | float | int
+    content: str
     coords: str
 
 
@@ -26,41 +26,41 @@ class Table:
 
 class XMLParser:
 
-    def __init__(self, xml_file):
+    def __init__(self, xml_file: str) -> None:
         self.xml_file = xml_file
         self.root = ET.fromstring(xml_file)
 
 
-    def _local_name(self, tag):
+    def _local_name(self, tag: str) -> str:
         """Extract the local name from an XML tag."""
         if '}' in tag:
             return tag.split('}', 1)[1]
         return tag
 
-    def _element_text(self, element):
+    def _element_text(self, element: ET.Element) -> str:
         """Extract the text content from an XML element."""
         return element.text.strip() if element.text else ''
 
-    def _normalize_text(self, text):
+    def _normalize_text(self, text: str) -> str:
         """Normalize text by removing extra whitespace and newlines."""
         return ' '.join(text.split())
 
-    def _find_first_by_local_name(self, element, local_name):
+    def _find_first_by_local_name(self, element: ET.Element, local_name: str) -> ET.Element | None:
         """Find the first descendant element (including self) with the given local tag name."""
         for descendant in element.iter():
             if self._local_name(descendant.tag) == local_name:
                 return descendant
         return None
 
-    def _find_all_by_local_name(self, element, local_name):
+    def _find_all_by_local_name(self, element: ET.Element, local_name: str) -> list[ET.Element]:
         """Find all descendant elements (including self) with the given local tag name."""
         return [d for d in element.iter() if self._local_name(d.tag) == local_name]
 
-    def _full_text(self, element):
+    def _full_text(self, element: ET.Element) -> str:
         """Extract the full text content of an element, including text of child elements."""
         return self._normalize_text(''.join(element.itertext()))
 
-    def _get_author_names(self, element) -> list[str]:
+    def _get_author_names(self, element: ET.Element) -> list[str]:
 
         # Restrict the search to the teiHeader: cited references in
         # text/back/listBibl also contain author elements that must be excluded.
@@ -92,7 +92,7 @@ class XMLParser:
 
         return authors
 
-    def _get_publication_date(self, element) -> str:
+    def _get_publication_date(self, element: ET.Element) -> str:
 
         imprint = self._find_first_by_local_name(element, 'imprint')
         if imprint is None:
@@ -111,7 +111,7 @@ class XMLParser:
 
         return ''
 
-    def _get_title(self, element) -> str:
+    def _get_title(self, element: ET.Element) -> str:
 
         title_stmt = self._find_first_by_local_name(element, 'titleStmt')
         if title_stmt is None:
@@ -127,7 +127,7 @@ class XMLParser:
 
         return ''
 
-    def _get_journal_name(self, element) -> str:
+    def _get_journal_name(self, element: ET.Element) -> str:
 
         monogr = self._find_first_by_local_name(element, 'monogr')
         if monogr is None:
@@ -144,14 +144,14 @@ class XMLParser:
         return ''
 
 
-    def get_metadata(self):
+    def get_metadata(self) -> dict[str, str | list[str]]:
 
         authors = self._get_author_names(self.root)
         publication_date = self._get_publication_date(self.root)
         title = self._get_title(self.root)
         journal_name = self._get_journal_name(self.root)
 
-        metadata = {
+        metadata: dict[str, str | list[str]] = {
             "authors": authors,
             "publication_date": publication_date,
             "title": title, 
@@ -171,7 +171,7 @@ class XMLParser:
         return True
 
 
-    def _build_table_row(self, row_element) -> TableRow:
+    def _build_table_row(self, row_element: ET.Element) -> TableRow:
 
         cells = [
             TableCell(
@@ -184,7 +184,7 @@ class XMLParser:
         return TableRow(cells=cells, coords=row_element.get('coords', ''))
 
 
-    def _get_table_title(self, figure_element) -> str:
+    def _get_table_title(self, figure_element: ET.Element) -> str:
         """Concatenate the table label/head and its caption into a single title."""
 
         title_parts = []
@@ -215,7 +215,7 @@ class XMLParser:
         return rows[0], rows[1:]
 
 
-    def _is_table_figure(self, figure_element) -> bool:
+    def _is_table_figure(self, figure_element: ET.Element) -> bool:
         """GROBID tags table figures with type="table"; plain graphic figures carry no type."""
 
         if figure_element.get('type') == 'table':
@@ -264,7 +264,7 @@ class XMLParser:
         return any(keyword in haystack for keyword in keywords)
 
 
-    def get_VLE_data(self):
+    def get_VLE_data(self) -> dict[str, list[Table]]:
 
         tables = self._detect_tables()
         candidate_tables = [table for table in tables if self._is_candidate_VLE_table(table)]
