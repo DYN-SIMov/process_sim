@@ -37,12 +37,14 @@ class GrobidBackend:
         request_timeout_seconds: float = 300.0,
         startup_timeout_seconds: float = 300.0,
         verbose: bool = True,
+        allow_service_autostart: bool = False,
     ) -> None:
 
         self._name = name
         self.verbose = verbose
         self.request_timeout_seconds = request_timeout_seconds
         self.startup_timeout_seconds = startup_timeout_seconds
+        self.allow_service_autostart = allow_service_autostart
         self.payload_parser = payload_parser or TEIXMLParser()
 
         self._base_url = base_url.rstrip("/") if base_url else None
@@ -67,6 +69,12 @@ class GrobidBackend:
 
         if self._base_url is not None:
             return self._base_url
+
+        if not self.allow_service_autostart:
+            raise BackendError(
+                "Refusing to auto-start local GROBID service without explicit "
+                "permission. Set allow_service_autostart=True or provide base_url."
+            )
 
         assert self._service is not None
         resolved_port = self._service.ensure_running()
