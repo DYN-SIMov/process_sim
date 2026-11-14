@@ -78,15 +78,16 @@ class GrobidBackend:
 
         assert self._service is not None
         resolved_port = self._service.ensure_running()
-        self._base_url = f"http://localhost:{resolved_port}"
+        base_url = f"http://localhost:{resolved_port}"
 
         wait_until_http_ready(
-            f"{self._base_url}/api/isalive",
+            f"{base_url}/api/isalive",
             timeout_seconds=self.startup_timeout_seconds,
             verbose=self.verbose,
         )
 
-        return self._base_url
+        self._base_url = base_url
+        return base_url
 
     def _request_tei_xml(self, pdf_path: str | Path) -> str:
 
