@@ -269,8 +269,15 @@ class PDFParser():
 
 class VLEDataPDFParser(PDFParser): 
 
-    def __init__(self) -> None: 
+    def __init__(self, allow_service_autostart: bool = False) -> None: 
         super().__init__()
+
+        if not allow_service_autostart:
+            raise GrobidError(
+                "GROBID service autostart is disabled by default. "
+                "Pass allow_service_autostart=True to VLEDataPDFParser(...) "
+                "to explicitly allow Docker container startup."
+            )
 
         self._verify_docker_is_available()
 
