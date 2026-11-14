@@ -146,7 +146,7 @@ class ContainerisedService:
             arguments.append("-d")
         if self.container_name:
             arguments.extend(["--name", self.container_name])
-        arguments.extend(["-p", f"{self.host_port}:{self.container_port}"])
+        arguments.extend(["-p", f"127.0.0.1:{self.host_port}:{self.container_port}"])
         arguments.append(self.image)
 
         self._run_docker(arguments, check=True)
