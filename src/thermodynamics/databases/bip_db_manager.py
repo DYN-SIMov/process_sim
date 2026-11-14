@@ -1,0 +1,435 @@
+import os
+
+import json 
+import numpy as np
+from datetime import datetime
+from enum import Enum
+from typing import Any
+
+from chemicals import CAS_from_any
+
+from thermodynamics.activity_models_regression.regression_aux import BinaryInteractionParametersRegression
+from thermodynamics.activity_models_regression.optimization import PolynomialExponentialDIPPR, PolynomialNRTL, PolynomialRegular
+from core.properties import WilsonActivityModel, NRTLActivityModel
+
+from termcolor import colored  # for colored text output
+
+
+class RegressionMethodSelectionError(ValueError):
+    pass
+
+
+class ActivityModel(Enum):
+    WILSON = WilsonActivityModel.__name__
+    NRTL = NRTLActivityModel.__name__
+
+
+class PolynimalType(Enum):
+    DIPPR_EXPONENTIAL = PolynomialExponentialDIPPR.__name__
+    NRTL = PolynomialNRTL.__name__
+    REGULAR = PolynomialRegular.__name__
+
+
+class OverwriteAttemptError(Exception):
+    pass
+
+
+class PolynomialException(Exception):
+    pass
+
+
+class BIPDatabaseManager: 
+
+    def __init__(self,
+                 database_filepath: str = os.path.join(os.path.dirname(__file__), 'BIP_database.json')):
+        
+        self.database_filepath = database_filepath
+        self.data = self._load_database()
+
+        # activity model and polyomial attributes are used to check compatibility
+        self.activity_model: ActivityModel | None = None
+        self.polynomial: PolynimalType | None = None
+        
+        pass
+
+
+    def _get_selected_activity_model(self) -> ActivityModel:
+        if self.activity_model is None:
+            raise RuntimeError(" Activity model is not set. Call add_entry() first. ")
+        return self.activity_model
+
+
+    def _get_selected_polynomial(self) -> PolynimalType:
+        if self.polynomial is None:
+            raise RuntimeError(" Polynomial type is not set. Call add_entry() first. ")
+        return self.polynomial
+
+
+    def add_entry(self,
+                  BIP_estimator:BinaryInteractionParametersRegression,
+                  force_overwrite: bool = False) -> None:
+    
+        self.activity_model = self._get_activity_model_from_estimator(BIP_estimator=BIP_estimator)
+        self.polynomial = self._get_polynomial_from_estimator(BIP_estimator=BIP_estimator)
+
+        self._select_regression_method(BIP_estimator=BIP_estimator)
+    
+        pair_key_data = self._get_component_pair_key(
+            component1=BIP_estimator.VLE_data.components[0], 
+            component2=BIP_estimator.VLE_data.components[1]
+        )
+        name_key = pair_key_data['components']
+        CAS_key = pair_key_data['CAS_numbers']
+
+        metadata = self._extract_metadata(
+            BIP_estimator=BIP_estimator
+        )
+
+        BIP_data = self._extract_BIP_data(
+            BIP_estimator=BIP_estimator,
+            name_key=name_key
+        )
+
+        self._check_overwrite(
+            force_overwrite=force_overwrite,
+            name_key=name_key,
+            CAS_key=CAS_key
+        )
+
+        self._run_export_checks(
+            BIP_estimator=BIP_estimator
+        )
+
+        self._insert_entry(
+            name_key=name_key,
+            CAS_key=CAS_key,
+            metadata=metadata,
+            BIP_data=BIP_data
+        )
+
+        self._save_database()
+
+        pass
+
+
+    def _select_regression_method(self,
+                                   BIP_estimator: BinaryInteractionParametersRegression) -> None:
+
+        regression_results_cache = BIP_estimator.regression_results_cache
+
+        print("\n")
+        print("Available regression results: ")
+        for method, results in regression_results_cache.items():
+            print(f" Regression method: {method.value} ")
+            for bip in results['regressed_BIPs']:
+                if hasattr(bip.value, 'shape'):
+                    print(f"   {bip.name}:"
+                          f" {np.array2string(
+                              bip.value, 
+                              formatter={'float_kind': lambda x: f'{x:6.3f}'})}"
+                    )
+                else:
+                    print(f"   {bip.name}: {bip.value:.3f}")
+            print(f" Goodness of fit (R^2): {results['goodness_of_fit']:.4f}")
+            print("-"*50)
+        print("\n")
+
+        available_methods = list(regression_results_cache.keys())
+        options_str = '\n'.join(
+            f" press [{k+1}] to select {method.value}"
+            for k, method in enumerate(available_methods)
+        )
+        method_selected = input(
+            f" Select the regression result to save to the database:\n"
+            f"{options_str}\n"
+            f" input: "
+        )
+
+        try:
+            selected_index = int(method_selected) - 1
+            if (selected_index < 0 or selected_index >= len(available_methods)):
+                raise RegressionMethodSelectionError
+            chosen_method = available_methods[selected_index]
+        except (RegressionMethodSelectionError):
+            print(f" Invalid selection. Defaulting to {available_methods[0].value}. ")
+            chosen_method = available_methods[0]
+
+        BIP_estimator.result_to_save = {
+            'regression_method': chosen_method.value,
+            'regressed_BIPs': regression_results_cache[chosen_method]['regressed_BIPs'],
+            'goodness_of_fit': regression_results_cache[chosen_method]['goodness_of_fit']
+        }
+
+        pass
+
+
+    def _load_database(self) -> dict[str, Any]:
+
+        if not os.path.exists(self.database_filepath):
+            with open(self.database_filepath, 'w') as f:
+                json.dump({}, f)
+                return {}
+
+        with open(self.database_filepath, 'r') as f:
+            database: dict[str, Any] = json.load(f)
+            return database
+
+
+    def _get_activity_model_from_estimator(
+            self,
+            BIP_estimator: BinaryInteractionParametersRegression
+        ) -> ActivityModel:
+
+        activity_model_name = BIP_estimator.activity_model_backend.__class__.__bases__[0].__name__
+        
+        return ActivityModel(activity_model_name)
+    
+
+    def _get_polynomial_from_estimator(
+            self,
+            BIP_estimator: BinaryInteractionParametersRegression
+        ) -> PolynimalType:
+
+        polynomial_name = BIP_estimator.polynomial.polynomial.__class__.__name__
+
+        return PolynimalType(polynomial_name)
+
+
+    def _get_component_pair_key(self,
+                                component1: str, 
+                                component2: str) -> dict[str, str]:
+
+        " Method to sort component names in alphabetical order to avoid confusion between (A, B) "
+        " and (B, A) component pairs. This method also retrieves components CAS numbers to ensure "
+        " uniqueness. "
+    
+        names_sorted = sorted([component1, component2])
+
+        CAS_sorted = []
+        for name in names_sorted:
+            CAS_entry = CAS_from_any(name)
+            if CAS_entry is None:
+                raise ValueError(f"Could not retrieve CAS number for component: {name}. "
+                                 f"Please check the component name.")
+            CAS_sorted.append(CAS_entry)
+
+        return {
+            'components': '-'.join(names_sorted),
+            'CAS_numbers': '-'.join(CAS_sorted)
+        }
+    
+
+    def _extract_metadata(self,
+                          BIP_estimator: BinaryInteractionParametersRegression) -> dict[str, Any]:
+        
+        component1, component2 = BIP_estimator.VLE_data.components
+        VLE_data_source = BIP_estimator.VLE_data.source
+
+        # ----------------------------------------------------------------------
+        # extracting temperature and pressure ranges considerd in the regression
+        # this consideres that some Txy points may be removed by data_handling.py
+        temperature_lb_K = 0.0
+        temperature_ub_K = 0.0
+        pressure_lb_Pa = 0.0
+        pressure_ub_Pa = 0.0
+
+        for point in BIP_estimator.VLE_data.T_x_y_points:
+            if point.temperature_K < temperature_lb_K or temperature_lb_K == 0.0:
+                temperature_lb_K = point.temperature_K
+            if point.temperature_K > temperature_ub_K:
+                temperature_ub_K = point.temperature_K
+            
+            for datum in point.data:
+                if datum.pressure_Pa < pressure_lb_Pa or pressure_lb_Pa == 0.0:
+                    pressure_lb_Pa = datum.pressure_Pa
+                if datum.pressure_Pa > pressure_ub_Pa:
+                    pressure_ub_Pa = datum.pressure_Pa
+        # ----------------------------------------------------------------------        
+        
+        activity_model = self._get_selected_activity_model().value
+        polynomial = self._get_selected_polynomial().value
+
+        polynomial_equation_str = BIP_estimator.polynomial.polynomial.equation_str
+        eos_backend = BIP_estimator.eos_backend.__class__.__name__
+        goodness_of_fit = BIP_estimator.result_to_save['goodness_of_fit']
+        regression_method = BIP_estimator.result_to_save['regression_method']
+
+        return {
+            'component1_name': component1,
+            'component2_name': component2,
+            'component1_CAS': CAS_from_any(component1),
+            'component2_CAS': CAS_from_any(component2),
+            'activity_model': activity_model,
+            'eos_backend': eos_backend,
+            'polynomial': polynomial,
+            'polynomial_equation': polynomial_equation_str,
+            'goodness_of_fit': goodness_of_fit,
+            'regression_method': regression_method,
+            'VLE_data_source': VLE_data_source,
+            'temperature_lb_K': temperature_lb_K,
+            'temperature_ub_K': temperature_ub_K,
+            'pressure_lb_Pa': pressure_lb_Pa,
+            'pressure_ub_Pa': pressure_ub_Pa,
+            'date_of_entry_creation': datetime.now().isoformat()
+        }      
+    
+
+    def _extract_BIP_data(self,
+                          BIP_estimator: BinaryInteractionParametersRegression,
+                          name_key: str) -> dict[str, Any]:
+
+        regressed_BIPs = BIP_estimator.result_to_save['regressed_BIPs']
+
+        component1, component2 = BIP_estimator.VLE_data.components
+        components_swapped = (
+            name_key != '-'.join([component1, component2])
+        )
+
+        if components_swapped:
+            swapped_BIPs = []
+            for k in range(0, len(regressed_BIPs), 2):
+                swapped_BIPs.extend([regressed_BIPs[k+1], regressed_BIPs[k]])
+            regressed_BIPs = swapped_BIPs
+        
+        BIP_data: dict[str, Any] = {}
+        for bip in regressed_BIPs:
+
+            # guard against numpy data types that are not JSON serializable
+            value = bip.value.tolist() if hasattr(bip.value, 'tolist') else bip.value
+            BIP_data[bip.name] = value
+
+        return BIP_data
+    
+
+
+    def _run_export_checks(self,
+                           BIP_estimator: BinaryInteractionParametersRegression) -> None:
+        
+        self._check_polynomial_compatibility(BIP_estimator=BIP_estimator)
+        self._check_model_compatibility()
+
+        pass 
+
+
+    def _check_polynomial_compatibility(self,
+                                        BIP_estimator: BinaryInteractionParametersRegression) -> None:
+        
+        polynomial = BIP_estimator.polynomial.polynomial
+        
+        if (self.activity_model == ActivityModel.WILSON and
+            not self.polynomial == PolynimalType.DIPPR_EXPONENTIAL
+            ):
+            raise PolynomialException(
+                f" The specified polynomial {polynomial} is not compatible "
+                f"with Wilson activity model regression. \n"
+                f" Please use {PolynomialExponentialDIPPR} polynomial for regression of "
+                f"Wilson BIP parameters. "
+            )
+        
+        if (self.activity_model == ActivityModel.NRTL and
+            not self.polynomial == PolynimalType.NRTL
+            ):
+            raise PolynomialException(
+                f" The specified polynomial {polynomial} is not compatible "
+                f"with NRTL activity model regression. \n"
+                f" Please use {PolynomialNRTL} polynomial for regression of "
+                f"NRTL BIP parameters. "
+            )
+        
+    
+    def _check_model_compatibility(self) -> None:
+        
+        if self._get_selected_activity_model().value not in self.data.keys():
+            raise ValueError(
+                f" The specified activity model {self.activity_model} is not compatible with the"
+                f" existing database structure. \n"
+            )
+
+
+    def _check_overwrite(self,
+                         force_overwrite: bool,
+                         name_key: str,
+                         CAS_key: str) -> None:
+
+        overwrite_attempt = False
+
+        if name_key in self.data[self._get_selected_activity_model().value]:
+            if not force_overwrite:
+                overwrite_attempt = True
+                if not self._offer_overwrite(name_key, CAS_key):
+                    raise OverwriteAttemptError(
+                        f" An entry for the component pair {name_key} already exists under the"
+                        f" activity model {self._get_selected_activity_model().value}." 
+                    )        
+            
+        if (not overwrite_attempt and 
+            CAS_key in self.data[self._get_selected_activity_model().value]):
+            if not force_overwrite:
+                overwrite_attempt = True
+                if not self._offer_overwrite(name_key, CAS_key):
+                    raise OverwriteAttemptError(
+                        f" An entry for the component pair with CAS numbers {CAS_key} already exists "
+                        f" under the activity model {self._get_selected_activity_model().value}."
+                    )
+
+        pass
+
+
+    def _offer_overwrite(self,
+                         name_key: str,
+                         CAS_key: str) -> bool:
+        
+        force_overwrite_input = input(
+            f" An entry for the component pair {name_key} already exists under the"
+            f" activity model {self._get_selected_activity_model().value}. \n"
+            f" Do you want to overwrite the existing entry? (y/n): "
+        )
+        if force_overwrite_input.lower() == 'y':
+            return True
+        else:
+            print(colored(
+                f" Entry for {name_key} under {self._get_selected_activity_model().value} was not overwritten. ", 'yellow'
+            ))
+            return False
+
+
+    def _insert_entry(self,
+                      name_key: str,
+                      CAS_key: str,
+                      metadata: dict[str, Any],
+                      BIP_data: dict[str, Any]) -> None: 
+        
+        entry = {
+            'metadata': metadata,
+            'BIP_data': BIP_data,
+        }
+
+        self.data[self._get_selected_activity_model().value][name_key] = entry
+        self.data[self._get_selected_activity_model().value][CAS_key] = entry
+
+        pass
+
+
+    def _save_database(self) -> None:
+
+        with open(self.database_filepath, 'w') as f:
+            json.dump(self.data, f, indent=4)
+
+        print(colored(f" Database successfully updated and saved to {self.database_filepath}.", 'green'))
+    
+
+    def get_entry_by_name(self) -> None:
+
+
+        pass
+
+
+    def get_entry_by_CAS(self) -> None:
+
+
+        pass 
+
+
+    pass 
+
+    
