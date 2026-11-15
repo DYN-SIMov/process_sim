@@ -186,7 +186,7 @@ class PDFParser():
         if container_name:
             docker_command.extend(["--name", container_name])
         if local_port is not None:
-            docker_command.extend(["-p", f"{local_port}:{container_port or local_port}"])
+            docker_command.extend(["-p", f"127.0.0.1:{local_port}:{container_port or local_port}"])
 
         docker_command.append(image)
 
