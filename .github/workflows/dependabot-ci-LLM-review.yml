@@ -1,0 +1,97 @@
+name: Dependabot CI LLM Review
+
+# Triggered when "Dependabot CI" (dependabot-ci.yml) completes. Collects the
+# status of that run and the pytest/mypy artifacts it produced, asks an LLM
+# (through the GitHub Copilot CLI) to review them and posts the review as a
+# comment on the originating Dependabot pull request.
+#
+# One-time setup:
+#   * Create a fine-grained personal access token with the
+#     "Copilot Requests" permission, owned by an account with a Copilot seat.
+#   * Store it as COPILOT_GITHUB_TOKEN both as a repository *Actions* secret and
+#     as a repository *Dependabot* secret (runs triggered by Dependabot can only
+#     read Dependabot secrets).
+#   * Optional: set the repository variable COPILOT_REVIEW_MODEL to choose a model
+#     (default: claude-sonnet-5.5, set in dependabot_llm_review.py).
+#
+# Note: workflow_run only fires for workflow files on the default branch.
+#
+# Security: this workflow runs with secrets and a write-scoped token, so it
+# never checks out or executes code from the pull request. The artifacts are
+# treated purely as untrusted text, the LLM is denied shell, write and network
+# tools, and the repository token is only given to the step that posts the comment.
+
+on:
+  workflow_run:
+    workflows: ["Dependabot CI"]
+    types: [completed]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  llm-review:
+    name: LLM review of Dependabot CI
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.actor.login == 'dependabot[bot]' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.conclusion != 'cancelled' &&
+      github.event.workflow_run.conclusion != 'skipped'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      actions: read         # download artifacts of the triggering run
+      contents: read
+      pull-requests: write  # comment on the Dependabot PR
+    steps:
+      - name: Check out review script (default branch)
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/workflows
+
+      - name: Download artifacts from the Dependabot CI run
+        # Missing artifacts (e.g. a run that failed during setup) are reported
+        # by the review script instead of aborting the review.
+        continue-on-error: true
+        uses: actions/download-artifact@v8
+        with:
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ci-artifacts
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+
+      - name: Install GitHub Copilot CLI
+        run: npm install --global @github/copilot
+
+      - name: Review CI results with Copilot
+        env:
+          COPILOT_GITHUB_TOKEN: ${{ secrets.COPILOT_GITHUB_TOKEN }}
+          COPILOT_REVIEW_MODEL: ${{ vars.COPILOT_REVIEW_MODEL }}
+          ARTIFACTS_DIR: ci-artifacts
+          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          CI_RUN_URL: ${{ github.event.workflow_run.html_url }}
+          PR_TITLE: ${{ github.event.workflow_run.display_title }}
+        run: python .github/workflows/dependabot_llm_review.py > review.md
+
+      - name: Post review as a comment on the Dependabot PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          cat review.md >> "$GITHUB_STEP_SUMMARY"
+          gh pr comment "$HEAD_BRANCH" --body-file review.md
