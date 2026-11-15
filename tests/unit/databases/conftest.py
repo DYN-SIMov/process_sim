@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from thermodynamics.activity_models_regression.activity_models_aux import (
+    ActivityModelRegressionInterface,
     NRTLActivityModelRegression,
     WilsonActivityModelRegression,
 )
@@ -42,6 +43,7 @@ def fake_bip_estimator_factory(
         polynomial_cls: type | None = None,
         components: tuple[str, str] = ("methanol", "water"),
     ) -> SimpleNamespace:
+        model: ActivityModelRegressionInterface
         if activity_model == "wilson":
             model = WilsonActivityModelRegression(components, fake_pure_component_backend)
             polynomial_cls = polynomial_cls or PolynomialExponentialDIPPR

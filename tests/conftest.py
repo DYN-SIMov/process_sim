@@ -198,7 +198,7 @@ SHIPPED_VLE_FILES = ("VLE_MeOH_H2O.csv", "VLE_MeOH_PrOH.csv", "VLE_H2O_NH3.csv")
 
 
 @pytest.fixture(params=SHIPPED_VLE_FILES)
-def shipped_vle_csv(request: pytest.FixtureRequest) -> Path:
+def shipped_vle_csv(request: pytest.FixtureRequest) -> Any:
     return THERMO_DATA_DIR / request.param
 
 
