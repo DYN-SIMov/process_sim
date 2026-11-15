@@ -1,0 +1,164 @@
+name: Dependabot CI
+
+# Runs the test suite and the type checker on every pull request opened (or
+# updated) by Dependabot, on the project's current Python (3.13) and on the
+# latest stable CPython release ("3.x"). Reports are uploaded as artifacts and
+# are consumed by the "Dependabot CI LLM Review" workflow
+# (dependabot-ci-LLM-review.yml), which is triggered when this one completes.
+#
+# It can also be started manually ("Run workflow" button in the Actions tab) on
+# any branch; manual runs execute all jobs but get no LLM review comment.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    # Explicit bash enables `-eo pipefail`, so `cmd | tee file` keeps cmd's exit code.
+    shell: bash
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  PYTHONUNBUFFERED: "1"
+  FORCE_COLOR: "0"
+
+jobs:
+  pytest:
+    name: pytest (Python ${{ matrix.python-version }})
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.x"]
+    steps:
+      - name: Check out PR
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        id: setup-python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project with dev dependencies
+        id: install
+        run: |
+          mkdir -p reports
+          {
+            python -m pip install --upgrade pip
+            python -m pip install -e ".[dev]"
+          } 2>&1 | tee reports/install-output.txt
+          python -m pip freeze > reports/pip-freeze.txt
+
+      - name: Run pytest
+        id: tool
+        run: |
+          python -m pytest \
+            --junitxml=reports/pytest-junit.xml \
+            -o junit_family=xunit2 \
+            2>&1 | tee reports/pytest-output.txt
+
+      - name: Write run metadata
+        if: always()
+        env:
+          CHECK: pytest
+          PYTHON_REQUESTED: ${{ matrix.python-version }}
+          PYTHON_RESOLVED: ${{ steps.setup-python.outputs.python-version }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          TOOL_OUTCOME: ${{ steps.tool.outcome }}
+        run: &write-metadata |
+          mkdir -p reports
+          python3 - <<'EOF'
+          import json, os
+          keys = ("CHECK", "PYTHON_REQUESTED", "PYTHON_RESOLVED", "INSTALL_OUTCOME", "TOOL_OUTCOME")
+          meta = {k.lower(): os.environ.get(k, "") for k in keys}
+          with open("reports/metadata.json", "w", encoding="utf-8") as fh:
+              json.dump(meta, fh, indent=2)
+          EOF
+
+      - name: Upload pytest results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pytest-py${{ steps.setup-python.outputs.python-version || matrix.python-version }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
+
+  mypy:
+    name: mypy (Python ${{ matrix.python-version }})
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.13", "3.x"]
+    steps:
+      - name: Check out PR
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python ${{ matrix.python-version }}
+        id: setup-python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install project with dev dependencies
+        id: install
+        run: |
+          mkdir -p reports
+          {
+            python -m pip install --upgrade pip
+            python -m pip install -e ".[dev]"
+          } 2>&1 | tee reports/install-output.txt
+          python -m pip freeze > reports/pip-freeze.txt
+
+      - name: Run mypy
+        id: tool
+        run: |
+          # mypy.ini pins python_version = 3.13; override it so each matrix
+          # entry is type-checked against the interpreter it runs on.
+          target="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+          python -m mypy \
+            --python-version "$target" \
+            --junit-xml reports/mypy-junit.xml \
+            2>&1 | tee reports/mypy-output.txt
+
+      - name: Write run metadata
+        if: always()
+        env:
+          CHECK: mypy
+          PYTHON_REQUESTED: ${{ matrix.python-version }}
+          PYTHON_RESOLVED: ${{ steps.setup-python.outputs.python-version }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+          TOOL_OUTCOME: ${{ steps.tool.outcome }}
+        run: *write-metadata
+
+      - name: Upload mypy results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mypy-py${{ steps.setup-python.outputs.python-version || matrix.python-version }}
+          path: reports/
+          if-no-files-found: warn
+          retention-days: 14
